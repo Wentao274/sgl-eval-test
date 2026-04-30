@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+build/
+dist/
+*.log
+.DS_Store
+.coverage
+htmlcov/
+*.swp
+.vscode/
+.idea/
+
+# Vendored prepare.py scripts download/extract data next to themselves on
+# first use; we move outputs to ~/.cache/sgl_eval/, but guard against partial
+# moves and preserve cleanliness of the vendored tree.
+sgl_eval/_vendored/nemo_skills/dataset/gsm8k/test.jsonl
+sgl_eval/_vendored/nemo_skills/dataset/gsm8k/original_*.jsonl
+sgl_eval/_vendored/nemo_skills/dataset/mmlu/test.jsonl
+sgl_eval/_vendored/nemo_skills/dataset/mmlu/data.tar
+sgl_eval/_vendored/nemo_skills/dataset/gpqa/*.jsonl

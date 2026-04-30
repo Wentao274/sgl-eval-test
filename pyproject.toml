@@ -1,0 +1,112 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sgl-eval"
+version = "0.0.1"
+description = "One-click accuracy evaluation harness for SGLang."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "SGLang Team" }]
+keywords = [
+    "llm",
+    "evaluation",
+    "benchmark",
+    "sglang",
+    "openai-compatible",
+    "aime",
+    "gpqa",
+    "mmlu",
+    "gsm8k",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    # Core (sgl-eval imports these directly)
+    "openai>=1.0,<3",
+    "httpx>=0.24,<1",
+    "tqdm>=4.65,<5",
+    "pyyaml>=6.0,<7",
+    # Math grader (vendored math_grader.py imports these)
+    "math_verify[antlr4_9_3]>=0.5,<1",
+    "latex2sympy2_extended>=1.0,<2",
+    # Vendored metrics + dataset prep scripts
+    "numpy>=1.24,<3",
+    "pandas>=2.0,<3",
+    "datasets>=2.14,<5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0,<9",
+    "pytest-asyncio>=0.23,<2",
+    "ruff>=0.5,<1",
+    "black>=24.0,<26",
+]
+
+[project.scripts]
+sgl-eval = "sgl_eval.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/sgl-project/sgl-eval"
+Repository = "https://github.com/sgl-project/sgl-eval"
+Issues = "https://github.com/sgl-project/sgl-eval/issues"
+
+[tool.setuptools.packages.find]
+include = ["sgl_eval*"]
+exclude = ["tests*", "scripts*"]
+
+[tool.setuptools.package-data]
+"sgl_eval._vendored.nemo_skills" = [
+    "SOURCES.yaml",
+    "prompts/*.yaml",
+    "dataset/*/__init__.py",
+    "dataset/*/test.txt",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.ruff.lint.per-file-ignores]
+"sgl_eval/_vendored/**" = ["I", "E", "F", "W"]
+
+[tool.black]
+target-version = ["py310"]
+line-length = 100
+extend-exclude = "sgl_eval/_vendored/"
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["sgl_eval"]
+skip = ["sgl_eval/_vendored"]
+
+[tool.pytest.ini_options]
+# Includes upstream NeMo-Skills' own behavior tests for the vendored
+# math_grader + BaseMetrics. Any dep upgrade or vendored sync that
+# changes grader behavior will surface here.
+testpaths = [
+    "tests",
+    "sgl_eval/_vendored/nemo_skills/tests",
+]
+markers = [
+    "live: requires a running OpenAI-compatible endpoint (skip in default CI)",
+]
