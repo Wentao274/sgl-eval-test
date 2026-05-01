@@ -1,9 +1,10 @@
 """``sgl-eval`` CLI entry point.
 
-Three subcommands:
+Subcommands:
   list                 enumerate registered benchmarks
   ping                 send one chat completion to the endpoint and print it
-  run <name>           run a benchmark end-to-end (filled in as benchmarks land)
+  run <name>           run a benchmark end-to-end
+  preset list/show     manage saved (model, dataset, sampling) presets
 """
 
 from __future__ import annotations
@@ -21,6 +22,13 @@ from sgl_eval import VENDORED_NS_ROOT
 from sgl_eval import __version__ as _SGL_EVAL_VERSION
 from sgl_eval.evals._predictions import PredictionsWriter
 from sgl_eval.metrics import dump_run, format_summary
+from sgl_eval.preset import (
+    add_preset_run_flag,
+    make_run_meta_block,
+    print_expected_vs_actual,
+    register_preset_subcommand,
+    resolve_run_inputs,
+)
 from sgl_eval.registry import get, list_evals
 from sgl_eval.sampler import ChatCompletionSampler
 from sgl_eval.types import GenConfig
@@ -48,8 +56,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_ping.set_defaults(func=cmd_ping)
 
     p_run = sub.add_parser("run", help="run a benchmark")
-    p_run.add_argument("name", help="benchmark name (see `sgl-eval list`)")
-    _add_endpoint_args(p_run)
+    p_run.add_argument(
+        "name",
+        nargs="?",
+        default=None,
+        help="benchmark name (see `sgl-eval list`); optional if --preset provides one",
+    )
+    add_preset_run_flag(p_run)
+    _add_endpoint_args(p_run, base_url_required=False)
     p_run.add_argument("--num-examples", type=int, default=None)
     p_run.add_argument("--num-threads", type=int, default=64)
     p_run.add_argument("--n-repeats", type=int, default=None)
@@ -76,13 +90,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     p_run.set_defaults(func=cmd_run, dump_predictions=True)
 
+    register_preset_subcommand(sub)
+
     args = parser.parse_args(argv)
     return args.func(args)
 
 
-def _add_endpoint_args(p: argparse.ArgumentParser) -> None:
+def _add_endpoint_args(p: argparse.ArgumentParser, *, base_url_required: bool = True) -> None:
     p.add_argument(
-        "--base-url", required=True, help="OpenAI-compatible endpoint, e.g. http://host:30000/v1"
+        "--base-url",
+        required=base_url_required,
+        default=None,
+        help="OpenAI-compatible endpoint, e.g. http://host:30000/v1",
     )
     p.add_argument("--model", default=None, help="model id (defaults to first /v1/models entry)")
     p.add_argument("--api-key", default="EMPTY")
@@ -126,25 +145,26 @@ def cmd_ping(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    spec = get(args.name)
-    sampler = ChatCompletionSampler(base_url=args.base_url, model=args.model, api_key=args.api_key)
-    gen = _override_gen(spec.default_gen, args)
-    n_repeats = args.n_repeats if args.n_repeats is not None else spec.default_n_repeats
+    inputs = resolve_run_inputs(args, get)
+    spec = get(inputs.benchmark)
 
-    _warn_if_greedy_repeats(n_repeats, gen)
+    sampler = ChatCompletionSampler(
+        base_url=inputs.base_url, model=inputs.model, api_key=args.api_key
+    )
+    _warn_if_greedy_repeats(inputs.n_repeats, inputs.gen)
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
     run_dir = Path(args.out_dir).expanduser() / f"sgl_eval_{spec.name}_{stamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
     print(f"Run directory: {run_dir}")
 
-    writer = PredictionsWriter(run_dir, n_repeats) if args.dump_predictions else None
+    writer = PredictionsWriter(run_dir, inputs.n_repeats) if args.dump_predictions else None
     try:
         result = spec.run(
             sampler=sampler,
-            gen=gen,
-            n_repeats=n_repeats,
-            num_examples=args.num_examples,
+            gen=inputs.gen,
+            n_repeats=inputs.n_repeats,
+            num_examples=inputs.num_examples,
             num_threads=args.num_threads,
             predictions_writer=writer,
         )
@@ -153,21 +173,32 @@ def cmd_run(args: argparse.Namespace) -> int:
             writer.close()
 
     print(format_summary(result))
-    run_meta = _build_run_meta(args=args, sampler=sampler, gen=gen, stamp=stamp)
+    run_meta = _build_run_meta(
+        args=args, sampler=sampler, gen=inputs.gen, stamp=stamp, base_url=inputs.base_url
+    )
+    preset_block = make_run_meta_block(args, inputs.preset)
+    if preset_block:
+        run_meta["preset"] = preset_block
     metrics_path = dump_run(result, run_dir, run_meta=run_meta)
     print(f"\nMetrics: {metrics_path}")
     if writer is not None:
-        print(f"Predictions: {run_dir}  ({n_repeats} jsonl file(s))")
+        print(f"Predictions: {run_dir}  ({inputs.n_repeats} jsonl file(s))")
+    print_expected_vs_actual(result, inputs.preset)
     return 0
 
 
 def _build_run_meta(
-    *, args: argparse.Namespace, sampler: ChatCompletionSampler, gen: GenConfig, stamp: str
+    *,
+    args: argparse.Namespace,
+    sampler: ChatCompletionSampler,
+    gen: GenConfig,
+    stamp: str,
+    base_url: str,
 ) -> Dict[str, Any]:
     return {
         "timestamp": stamp,
         "model": sampler.model,
-        "base_url": args.base_url,
+        "base_url": base_url,
         "num_threads": args.num_threads,
         "gen": dataclasses.asdict(gen),
         "sgl_eval_version": _SGL_EVAL_VERSION,
@@ -186,22 +217,6 @@ def _read_ns_commit_sha() -> Optional[str]:
     except FileNotFoundError:
         return None
     return yaml.safe_load(text).get("synced_from_sha")
-
-
-def _override_gen(default: GenConfig, args: argparse.Namespace) -> GenConfig:
-    chat_template_kwargs = dict(default.chat_template_kwargs or {})
-    if args.thinking is not None:
-        chat_template_kwargs["thinking"] = args.thinking
-    return GenConfig(
-        temperature=args.temperature if args.temperature is not None else default.temperature,
-        top_p=args.top_p if args.top_p is not None else default.top_p,
-        max_tokens=args.max_tokens if args.max_tokens is not None else default.max_tokens,
-        reasoning_effort=default.reasoning_effort,
-        chat_template_kwargs=chat_template_kwargs or None,
-        extra_body=default.extra_body,
-        seed=default.seed,
-        system_message=default.system_message,
-    )
 
 
 def _warn_if_greedy_repeats(n_repeats: int, gen: GenConfig) -> None:

@@ -43,6 +43,15 @@ full payload as JSON under `--out-dir`. For example:
 
 ---
 
+## Presets
+
+Save a `(benchmark, endpoint, sampling, n_repeats, expected)` bundle to
+`~/.sgl_eval/presets/<name>.yaml` and replay with `sgl-eval run --preset
+<name>`. See [`preset.md`](preset.md) for schema, example, usage, and
+override priority.
+
+---
+
 ## Supported benchmarks
 
 `sgl-eval list` for the registered set; `sgl-eval list -v` for per-benchmark
