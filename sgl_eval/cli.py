@@ -9,9 +9,17 @@ Three subcommands:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import sys
-from typing import List, Optional
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+import yaml
+
+from sgl_eval import VENDORED_NS_ROOT
+from sgl_eval import __version__ as _SGL_EVAL_VERSION
+from sgl_eval.evals._predictions import PredictionsWriter
 from sgl_eval.metrics import dump_run, format_summary
 from sgl_eval.registry import get, list_evals
 from sgl_eval.sampler import ChatCompletionSampler
@@ -54,8 +62,19 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=None,
         help="override chat_template_kwargs.thinking (per-benchmark default applies otherwise)",
     )
-    p_run.add_argument("--out-dir", default=None)
-    p_run.set_defaults(func=cmd_run)
+    p_run.add_argument(
+        "--out-dir",
+        default="~/.sgl_eval",
+        help="parent dir for run folders; each run writes into "
+        "<out-dir>/sgl_eval_<name>_<stamp>/ (default: ~/.sgl_eval)",
+    )
+    p_run.add_argument(
+        "--no-dump-predictions",
+        dest="dump_predictions",
+        action="store_false",
+        help="skip streaming per-sample prediction JSONL (output-rs*.jsonl)",
+    )
+    p_run.set_defaults(func=cmd_run, dump_predictions=True)
 
     args = parser.parse_args(argv)
     return args.func(args)
@@ -114,17 +133,59 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     _warn_if_greedy_repeats(n_repeats, gen)
 
-    result = spec.run(
-        sampler=sampler,
-        gen=gen,
-        n_repeats=n_repeats,
-        num_examples=args.num_examples,
-        num_threads=args.num_threads,
-    )
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    run_dir = Path(args.out_dir).expanduser() / f"sgl_eval_{spec.name}_{stamp}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Run directory: {run_dir}")
+
+    writer = PredictionsWriter(run_dir, n_repeats) if args.dump_predictions else None
+    try:
+        result = spec.run(
+            sampler=sampler,
+            gen=gen,
+            n_repeats=n_repeats,
+            num_examples=args.num_examples,
+            num_threads=args.num_threads,
+            predictions_writer=writer,
+        )
+    finally:
+        if writer is not None:
+            writer.close()
+
     print(format_summary(result))
-    path = dump_run(result, args.out_dir)
-    print(f"\nMetrics written to: {path}")
+    run_meta = _build_run_meta(args=args, sampler=sampler, gen=gen, stamp=stamp)
+    metrics_path = dump_run(result, run_dir, run_meta=run_meta)
+    print(f"\nMetrics: {metrics_path}")
+    if writer is not None:
+        print(f"Predictions: {run_dir}  ({n_repeats} jsonl file(s))")
     return 0
+
+
+def _build_run_meta(
+    *, args: argparse.Namespace, sampler: ChatCompletionSampler, gen: GenConfig, stamp: str
+) -> Dict[str, Any]:
+    return {
+        "timestamp": stamp,
+        "model": sampler.model,
+        "base_url": args.base_url,
+        "num_threads": args.num_threads,
+        "gen": dataclasses.asdict(gen),
+        "sgl_eval_version": _SGL_EVAL_VERSION,
+        "ns_commit_sha": _read_ns_commit_sha(),
+    }
+
+
+def _read_ns_commit_sha() -> Optional[str]:
+    """Vendored slice's pinned upstream SHA (``SOURCES.yaml``). Returns
+    ``None`` only when the manifest is absent (e.g. running from a non-
+    standard checkout); a malformed manifest is a sync_vendored bug and
+    should surface as a YAMLError, not be swallowed."""
+    manifest = VENDORED_NS_ROOT / "SOURCES.yaml"
+    try:
+        text = manifest.read_text()
+    except FileNotFoundError:
+        return None
+    return yaml.safe_load(text).get("synced_from_sha")
 
 
 def _override_gen(default: GenConfig, args: argparse.Namespace) -> GenConfig:
