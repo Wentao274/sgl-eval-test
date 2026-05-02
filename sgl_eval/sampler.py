@@ -9,6 +9,7 @@ side-channel list).
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any, Dict, Optional
 
@@ -16,6 +17,7 @@ import httpx
 import openai
 from openai import OpenAI
 
+from sgl_eval.runner import WorkerAborted
 from sgl_eval.types import GenConfig, MessageList, Sample
 
 LOG = logging.getLogger(__name__)
@@ -40,9 +42,32 @@ class ChatCompletionSampler:
         api_key: str = "EMPTY",
         max_retries: int = 6,
     ) -> None:
-        self.client = OpenAI(base_url=base_url, api_key=api_key, http_client=_LargeHttpxClient())
+        # Hold the httpx client directly so ``abort()`` can close it without
+        # reaching into ``OpenAI``'s private ``_client`` attribute.
+        self._http = _LargeHttpxClient()
+        self.client = OpenAI(base_url=base_url, api_key=api_key, http_client=self._http)
         self.model = model or self._resolve_default_model()
         self.max_retries = max_retries
+        self._abort_event = threading.Event()
+
+    @property
+    def aborted(self) -> bool:
+        """True if ``abort()`` was called. CLI uses this to decide exit code
+        without needing to share a ``threading.Event`` directly."""
+        return self._abort_event.is_set()
+
+    def abort(self) -> None:
+        """Set the abort flag and close the underlying httpx client.
+
+        In-flight ``chat.completions.create(...)`` calls raise immediately;
+        the retry loop short-circuits on the abort flag and re-raises
+        ``WorkerAborted``. Idempotent.
+        """
+        self._abort_event.set()
+        try:
+            self._http.close()
+        except Exception:
+            pass
 
     def _resolve_default_model(self) -> str:
         models = self.client.models.list().data
@@ -62,6 +87,8 @@ class ChatCompletionSampler:
         kwargs = self._build_kwargs(messages, gen)
 
         for trial in range(self.max_retries):
+            if self._abort_event.is_set():
+                raise WorkerAborted()
             try:
                 start = time.time()
                 response = self.client.chat.completions.create(**kwargs)
@@ -71,6 +98,8 @@ class ChatCompletionSampler:
                 LOG.warning("BadRequestError, returning empty sample: %s", e)
                 return Sample(text="", finish_reason="error", raw=e)
             except Exception as e:
+                if self._abort_event.is_set():
+                    raise WorkerAborted() from e
                 backoff = 2**trial
                 LOG.warning(
                     "Sampler exception (trial %d/%d), backing off %ds: %s",
@@ -79,7 +108,9 @@ class ChatCompletionSampler:
                     backoff,
                     e,
                 )
-                time.sleep(backoff)
+                # Wake immediately if abort fires during the backoff sleep.
+                if self._abort_event.wait(backoff):
+                    raise WorkerAborted() from e
 
         LOG.error("Sampler exhausted retries; returning empty sample.")
         return Sample(text="", finish_reason="error")

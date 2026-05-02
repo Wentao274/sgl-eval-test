@@ -32,6 +32,16 @@ from tqdm import tqdm
 
 from sgl_eval.types import Example, ExampleResult, RunResult, Sample
 
+
+class WorkerAborted(Exception):
+    """Raised by ``sample_fn`` to tell the runner this ``(example, repeat)``
+    pair was abandoned mid-flight (e.g. CLI Ctrl-C closed the underlying
+    transport). The runner skips the pair, drops examples with no completed
+    repeats, and reports ``RunResult.partial = True``. Any sampler /
+    transport that wants to participate in cooperative cancellation should
+    raise this (or a subclass) from inside ``sample_fn``."""
+
+
 TickFn = Callable[[int, float], None]
 SampleFn = Callable[..., Sample]
 ScoreOneFn = Callable[[Example, Sample], Tuple[float, Optional[str]]]
@@ -102,6 +112,8 @@ def run_examples(
 
     aggregate = aggregate_fn(results) if aggregate_fn else _default_aggregate(results)
 
+    planned_samples = len(examples) * n_repeats
+    completed_samples = sum(len(r.samples) for r in results)
     return RunResult(
         name=name,
         per_example=results,
@@ -111,6 +123,8 @@ def run_examples(
         n_repeats=n_repeats,
         total_completion_tokens=total_completion,
         total_prompt_tokens=total_prompt,
+        partial=completed_samples < planned_samples,
+        planned_examples=len(examples),
     )
 
 
@@ -127,30 +141,34 @@ def _run_sample_score_phase(
     tick: TickFn,
     on_sample_scored: Optional[OnSampleScoredFn],
 ) -> None:
+    def record(ex: Example, rep: int, sample: Sample) -> None:
+        samples_by_ex[ex.id][rep] = sample
+        score, extracted = score_one_fn(ex, sample)
+        scores_by_ex[ex.id][rep] = score
+        extracted_by_ex[ex.id][rep] = extracted
+        if on_sample_scored is not None:
+            on_sample_scored(ex, rep, sample, score, extracted)
+        tick(rep, score)
+
     if workers == 1:
         for ex, rep in tasks:
-            sample = sample_fn(ex, rep)
-            samples_by_ex[ex.id][rep] = sample
-            score, extracted = score_one_fn(ex, sample)
-            scores_by_ex[ex.id][rep] = score
-            extracted_by_ex[ex.id][rep] = extracted
-            if on_sample_scored is not None:
-                on_sample_scored(ex, rep, sample, score, extracted)
-            tick(rep, score)
+            try:
+                sample = sample_fn(ex, rep)
+            except WorkerAborted:
+                return
+            record(ex, rep, sample)
         return
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(sample_fn, ex, rep): (ex.id, rep) for ex, rep in tasks}
         for fut in as_completed(futures):
             ex_id, rep = futures[fut]
-            sample = fut.result()
-            samples_by_ex[ex_id][rep] = sample
-            ex = ex_by_id[ex_id]
-            score, extracted = score_one_fn(ex, sample)
-            scores_by_ex[ex_id][rep] = score
-            extracted_by_ex[ex_id][rep] = extracted
-            if on_sample_scored is not None:
-                on_sample_scored(ex, rep, sample, score, extracted)
-            tick(rep, score)
+            try:
+                sample = fut.result()
+            except WorkerAborted:
+                # Cooperative cancellation: queued sibling workers will hit
+                # this path too -- they short-circuit at the sampler entry.
+                continue
+            record(ex_by_id[ex_id], rep, sample)
 
 
 def _assemble_results(
@@ -159,16 +177,25 @@ def _assemble_results(
     scores_by_ex: Dict[str, List[float]],
     extracted_by_ex: Dict[str, List[Optional[str]]],
 ) -> List[ExampleResult]:
+    """Filter out repeats whose sample never completed (partial-run case
+    where the runner was aborted mid-flight). Keeps samples / scores /
+    extracted aligned in length so downstream aggregators see consistent
+    triples. Examples with zero completed repeats are dropped entirely."""
     results: List[ExampleResult] = []
     for ex in examples:
-        samples = [s for s in samples_by_ex[ex.id] if s is not None]
+        samples: List[Sample] = []
+        scores: List[float] = []
+        extracted: List[Optional[str]] = []
+        for s, sc, e in zip(samples_by_ex[ex.id], scores_by_ex[ex.id], extracted_by_ex[ex.id]):
+            if s is None:
+                continue
+            samples.append(s)
+            scores.append(sc)
+            extracted.append(e)
+        if not samples:
+            continue
         results.append(
-            ExampleResult(
-                example=ex,
-                samples=samples,
-                scores=list(scores_by_ex[ex.id]),
-                extracted=list(extracted_by_ex[ex.id]),
-            )
+            ExampleResult(example=ex, samples=samples, scores=scores, extracted=extracted)
         )
     return results
 
