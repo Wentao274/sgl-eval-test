@@ -25,6 +25,7 @@ _mcq_mod.tqdm = lambda iterable, **_kwargs: iterable
 from sgl_eval._vendored.nemo_skills.evaluator.mcq import eval_mcq  # noqa: E402
 from sgl_eval._vendored.nemo_skills.math_metrics import MathMetrics  # noqa: E402
 from sgl_eval.evals._prompts import render_prompt  # noqa: E402
+from sgl_eval.evals._vision import build_user_content  # noqa: E402
 from sgl_eval.predictions import PredictionsWriter, sample_to_pred  # noqa: E402
 from sgl_eval.runner import SampleFn, ScoreOneFn, run_examples  # noqa: E402
 from sgl_eval.sampler import ChatCompletionSampler  # noqa: E402
@@ -50,7 +51,8 @@ def _score_via_eval_mcq(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def make_sample_fn(sampler: ChatCompletionSampler, gen: GenConfig, prompt_yaml: Path) -> SampleFn:
     def sample_fn(ex: Example, _rep_idx: int) -> Sample:
         prompt_text = render_prompt(prompt_yaml, problem=ex.inputs["problem"])
-        return sampler([{"role": "user", "content": prompt_text}], gen)
+        content = build_user_content(prompt_text, ex.media)
+        return sampler([{"role": "user", "content": content}], gen)
 
     return sample_fn
 

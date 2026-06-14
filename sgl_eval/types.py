@@ -48,6 +48,18 @@ class Sample:
 
 
 @dataclass
+class MediaItem:
+    """One input media attachment (image/video). ``kind`` selects the message
+    block; ``data`` (raw bytes) is used for images via base64 data URL, ``url``
+    for video (too large to inline) or pre-hosted images."""
+
+    kind: str  # "image" | "video"
+    data: bytes = b""
+    url: str = ""
+    mime: str = ""  # "image/png" | "video/mp4" | ...
+
+
+@dataclass
 class Example:
     """One benchmark sample as loaded from its dataset."""
 
@@ -55,6 +67,7 @@ class Example:
     inputs: Dict[str, Any]
     target: Any
     meta: Dict[str, Any] = field(default_factory=dict)
+    media: List[MediaItem] = field(default_factory=list)
 
 
 @dataclass
