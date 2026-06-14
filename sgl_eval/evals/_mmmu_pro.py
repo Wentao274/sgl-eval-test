@@ -19,13 +19,14 @@ from sgl_eval._vendored.nemo_skills.dataset._utils import get_mcq_fields
 from sgl_eval.types import Example, MediaItem
 
 _DATASET = "MMMU/MMMU_Pro"
+_CONFIG = "standard (10 options)"
 
 
-def load_mmmu_pro(split: str = "validation", num_examples: Optional[int] = None) -> List[Example]:
+def load_mmmu_pro(split: str = "test", num_examples: Optional[int] = None) -> List[Example]:
     """Load MMMU-Pro ``split`` as Examples with the question image attached."""
     from datasets import load_dataset  # lazy: heavy import, benchmark-specific
 
-    ds = load_dataset(_DATASET, split=split)
+    ds = load_dataset(_DATASET, _CONFIG, split=split)
     examples: List[Example] = []
     for i, row in enumerate(ds):
         question = row["question"]

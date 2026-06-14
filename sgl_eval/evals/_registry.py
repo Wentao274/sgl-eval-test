@@ -88,7 +88,7 @@ _TABLE = [
         "name": "mmmu_pro",
         "metrics_type": "multichoice",
         "prompt": "mcq-10choices",
-        "loader_fn": lambda num_examples: load_mmmu_pro("validation", num_examples),
+        "loader_fn": lambda num_examples: load_mmmu_pro("test", num_examples),
         "thinking": True,
         "default_n_repeats": 1,
         "description": "MMMU-Pro (multimodal, 10-choice, vision-dependent).",
