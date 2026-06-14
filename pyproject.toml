@@ -48,6 +48,8 @@ dependencies = [
     "numpy>=1.24,<3",
     "pandas>=2.0,<3",
     "datasets>=2.14,<5",
+    # Multimodal benchmarks (MMMU-Pro question image -> PNG bytes)
+    "pillow>=10,<12",
 ]
 
 [project.optional-dependencies]

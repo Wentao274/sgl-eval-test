@@ -29,14 +29,18 @@ choices.
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 from typing import Callable, Dict, Tuple
 
 from sgl_eval.evals._loader import load_bundled, load_via_prepare
 from sgl_eval.evals._math import run_math_benchmark
+from sgl_eval.evals._mmmu_pro import load_mmmu_pro
 from sgl_eval.evals._multichoice import run_multichoice_benchmark
 from sgl_eval.evals._prompts import vendored_prompt
 from sgl_eval.registry import EvalSpec, register
 from sgl_eval.types import GenConfig
+
+_SE_PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
 
 _TABLE = [
     {
@@ -78,6 +82,17 @@ _TABLE = [
         "default_n_repeats": 8,
         "description": "GPQA Diamond (graduate-level QA, pass@k + majority@k).",
     },
+    {
+        # SE-own benchmark (NS upstream has no MMMU-Pro). metrics_type + prompt
+        # + loader_fn bypass the vendored dataset/__init__.py + prepare path.
+        "name": "mmmu_pro",
+        "metrics_type": "multichoice",
+        "prompt": "mcq-10choices",
+        "loader_fn": lambda num_examples: load_mmmu_pro("validation", num_examples),
+        "thinking": True,
+        "default_n_repeats": 1,
+        "description": "MMMU-Pro (multimodal, 10-choice, vision-dependent).",
+    },
 ]
 
 
@@ -99,6 +114,14 @@ def _resolve_upstream_metadata(name: str) -> Tuple[str, str]:
     return metrics_type, prompt_config.split("/")[-1]
 
 
+def _resolve_prompt(basename: str) -> Path:
+    """Vendored prompt if it exists, else sgl-eval's own prompts/ dir."""
+    vendored = vendored_prompt(basename)
+    if vendored.exists():
+        return vendored
+    return _SE_PROMPT_DIR / f"{basename}.yaml"
+
+
 def _build_default_gen(thinking: bool) -> GenConfig:
     """All NS-aligned defaults (``temperature=0.0``, ``top_p=0.95``,
     ``max_tokens=None``); only ``chat_template_kwargs.thinking`` varies."""
@@ -108,6 +131,8 @@ def _build_default_gen(thinking: bool) -> GenConfig:
 
 
 def _build_loader(entry: dict):
+    if "loader_fn" in entry:
+        return entry["loader_fn"]
     kind = entry["loader"]
     if kind == "bundled":
         return load_bundled(entry["name"])
@@ -146,7 +171,7 @@ def _build_run(name: str, metrics_type: str, prompt_basename: str, loader: Calla
 
         return run
     if metrics_type == "multichoice":
-        prompt_yaml = vendored_prompt(prompt_basename)
+        prompt_yaml = _resolve_prompt(prompt_basename)
 
         def run(
             *,
@@ -176,7 +201,11 @@ def _build_run(name: str, metrics_type: str, prompt_basename: str, loader: Calla
 
 for _entry in _TABLE:
     _name = _entry["name"]
-    _metrics_type, _prompt_basename = _resolve_upstream_metadata(_name)
+    if "metrics_type" in _entry:
+        _metrics_type = _entry["metrics_type"]
+        _prompt_basename = _entry["prompt"]
+    else:
+        _metrics_type, _prompt_basename = _resolve_upstream_metadata(_name)
     _loader = _build_loader(_entry)
     _run = _build_run(_name, _metrics_type, _prompt_basename, _loader)
     register(
