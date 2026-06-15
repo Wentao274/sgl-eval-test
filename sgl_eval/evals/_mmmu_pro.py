@@ -30,7 +30,14 @@ def load_mmmu_pro(split: str = "test", num_examples: Optional[int] = None) -> Li
     examples: List[Example] = []
     for i, row in enumerate(ds):
         question = row["question"]
-        options = list(row.get("options") or [])
+        options = row.get("options")
+        if isinstance(options, str):
+            # HF stores MMMU_Pro options as a Python-literal string ("['a','b',...]"),
+            # not a list; list(str) would split it into characters.
+            import ast
+
+            options = ast.literal_eval(options)
+        options = list(options or [])
         answer = _normalize_answer(row.get("answer"))
         problem = get_mcq_fields(question, options)["problem"]
         examples.append(
