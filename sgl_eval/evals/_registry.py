@@ -123,10 +123,14 @@ def _resolve_prompt(basename: str) -> Path:
 
 
 def _build_default_gen(thinking: bool) -> GenConfig:
-    """All NS-aligned defaults (``temperature=0.0``, ``top_p=0.95``,
-    ``max_tokens=None``); only ``chat_template_kwargs.thinking`` varies."""
+    """All NS-aligned defaults (``temperature=0.0``, ``top_p=0.95``); only
+    ``chat_template_kwargs.thinking`` varies. ``max_tokens`` is raised to 32k
+    so reasoning benchmarks (which emit long CoT before the final answer) are
+    not truncated before the answer is generated -- non-reasoning generations
+    stay short and are unaffected by the higher ceiling."""
     return GenConfig(
         chat_template_kwargs={"thinking": True} if thinking else None,
+        max_tokens=32768,
     )
 
 
