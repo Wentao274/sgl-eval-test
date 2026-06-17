@@ -68,3 +68,30 @@ def test_mixed_image_and_video():
 def test_unsupported_kind_raises():
     with pytest.raises(ValueError, match="unsupported media kind"):
         build_user_content("q", [MediaItem(kind="audio", data=b"x")])
+
+
+def test_image_inserted_at_placeholder_preserves_order():
+    """Image goes where [image] sits in the prompt, not appended after text."""
+    media = [MediaItem(kind="image", data=b"i", mime="image/png")]
+    content = build_user_content("before [image] after", media)
+    assert [b["type"] for b in content] == ["text", "image_url", "text"]
+    assert content[0]["text"] == "before "
+    assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert content[2]["text"] == " after"
+
+
+def test_no_placeholder_appends_image_after_text():
+    """No [image] marker -> text first, image appended (backward-compat)."""
+    media = [MediaItem(kind="image", data=b"i", mime="image/png")]
+    content = build_user_content("plain prompt", media)
+    assert [b["type"] for b in content] == ["text", "image_url"]
+    assert content[0]["text"] == "plain prompt"
+
+
+def test_two_placeholders_two_images_in_order():
+    media = [
+        MediaItem(kind="image", data=b"a", mime="image/png"),
+        MediaItem(kind="image", data=b"b", mime="image/png"),
+    ]
+    content = build_user_content("x[image]y[image]z", media)
+    assert [b["type"] for b in content] == ["text", "image_url", "text", "image_url", "text"]

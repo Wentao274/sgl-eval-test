@@ -4,6 +4,11 @@
 OpenAI-style ``content``: a plain string when there is no media (so text
 benchmarks stay byte-for-byte compatible), or a list of text / image_url /
 video_url blocks otherwise. The sampler passes it through unchanged.
+
+Image placement: if the prompt contains ``[image]`` placeholders (left by
+the MMMU-Pro loader after stripping ``<image n>``), images are inserted at
+those positions to preserve in-question order; otherwise they are appended
+after the text.
 """
 
 from __future__ import annotations
@@ -14,6 +19,8 @@ from typing import List, Union
 from sgl_eval.types import MediaItem
 
 ContentType = Union[str, list]
+
+_IMAGE_PLACEHOLDER = "[image]"
 
 
 def build_user_content(prompt: str, media: List[MediaItem]) -> ContentType:
@@ -26,11 +33,31 @@ def build_user_content(prompt: str, media: List[MediaItem]) -> ContentType:
     """
     if not media:
         return prompt
-    content: list = [{"type": "text", "text": prompt}]
+    content: list = []
+    image_media = [m for m in media if m.kind == "image"]
+    image_idx = 0
+
+    # Insert images at [image] placeholders to preserve in-question order
+    # (e.g. MMMU-Pro's <image n> position); fall back to appending after text.
+    if image_media and _IMAGE_PLACEHOLDER in prompt:
+        parts = prompt.split(_IMAGE_PLACEHOLDER)
+        for idx, part in enumerate(parts):
+            if part:
+                content.append({"type": "text", "text": part})
+            if idx < len(parts) - 1 and image_idx < len(image_media):
+                content.append(_image_block(image_media[image_idx]))
+                image_idx += 1
+    else:
+        content.append({"type": "text", "text": prompt})
+
+    # Append any non-image media (video) and images that had no placeholder.
+    inserted_images = image_idx
     for m in media:
         if m.kind == "image":
-            url = m.url or _data_url(m.data, m.mime or "image/png")
-            content.append({"type": "image_url", "image_url": {"url": url}})
+            if inserted_images > 0:
+                inserted_images -= 1
+                continue
+            content.append(_image_block(m))
         elif m.kind == "video":
             if not m.url:
                 raise ValueError("video MediaItem requires a url (too large to base64-inline)")
@@ -38,6 +65,11 @@ def build_user_content(prompt: str, media: List[MediaItem]) -> ContentType:
         else:
             raise ValueError(f"unsupported media kind: {m.kind!r}")
     return content
+
+
+def _image_block(m: MediaItem) -> dict:
+    url = m.url or _data_url(m.data, m.mime or "image/png")
+    return {"type": "image_url", "image_url": {"url": url}}
 
 
 def _data_url(data: bytes, mime: str) -> str:
