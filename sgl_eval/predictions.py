@@ -25,6 +25,8 @@ def sample_to_pred(sample: Sample, example: Example) -> Dict[str, Any]:
         "num_generated_tokens": completion,
         "num_reasoning_tokens": reasoning,
         "num_answer_tokens": max(completion - reasoning, 0),
+        # Generation stop reason ("stop" / "length" / "error").
+        "finish_reason": sample.finish_reason,
         "problem": example.inputs.get("problem", ""),
     }
     # NS ``BaseMetrics.update`` skips entries missing these keys; only set

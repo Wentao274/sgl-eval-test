@@ -101,6 +101,8 @@ def run_examples(
     total_prompt = sum(s.prompt_tokens or 0 for r in results for s in r.samples if s)
 
     aggregate = aggregate_fn(results) if aggregate_fn else _default_aggregate(results)
+    for key, value in _finish_reason_rates(results).items():
+        aggregate.setdefault(key, value)
 
     planned_samples = len(examples) * n_repeats
     completed_samples = sum(len(r.samples) for r in results)
@@ -124,3 +126,18 @@ def _default_aggregate(results: List[ExampleResult]) -> Dict[str, float]:
     per_example_means = [sum(r.scores) / len(r.scores) for r in results if r.scores]
     score = sum(per_example_means) / len(per_example_means) if per_example_means else 0.0
     return {"score": score}
+
+
+def _finish_reason_rates(results: List[ExampleResult]) -> Dict[str, float]:
+    """Per-stop-reason fractions over samples with a known ``finish_reason``
+    (None excluded). ``truncated_rate`` flags no-EOS runaways; ``error_rate``
+    covers any other reason (sampler sets ``"error"`` on failed requests)."""
+    reasons = [s.finish_reason for r in results for s in r.samples if s and s.finish_reason]
+    if not reasons:
+        return {}
+    n = len(reasons)
+    return {
+        "stop_rate": sum(fr == "stop" for fr in reasons) / n,
+        "truncated_rate": sum(fr == "length" for fr in reasons) / n,
+        "error_rate": sum(fr not in ("stop", "length") for fr in reasons) / n,
+    }
