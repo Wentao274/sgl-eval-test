@@ -95,3 +95,12 @@ def test_two_placeholders_two_images_in_order():
     ]
     content = build_user_content("x[image]y[image]z", media)
     assert [b["type"] for b in content] == ["text", "image_url", "text", "image_url", "text"]
+
+
+def test_more_placeholders_than_images_inserts_missing_marker():
+    """A ``[image]`` placeholder with no matching image becomes a visible
+    ``[image missing]`` text block, not a silent drop."""
+    media = [MediaItem(kind="image", data=b"i", mime="image/png")]
+    content = build_user_content("x[image]y[image]z", media)
+    assert [b["type"] for b in content] == ["text", "image_url", "text", "text", "text"]
+    assert content[3]["text"] == "[image missing]"

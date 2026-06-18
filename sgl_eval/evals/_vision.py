@@ -44,9 +44,13 @@ def build_user_content(prompt: str, media: List[MediaItem]) -> ContentType:
         for idx, part in enumerate(parts):
             if part:
                 content.append({"type": "text", "text": part})
-            if idx < len(parts) - 1 and image_idx < len(image_media):
-                content.append(_image_block(image_media[image_idx]))
-                image_idx += 1
+            if idx < len(parts) - 1:
+                if image_idx < len(image_media):
+                    content.append(_image_block(image_media[image_idx]))
+                    image_idx += 1
+                else:
+                    # placeholder with no matching image: visible, not silently dropped
+                    content.append({"type": "text", "text": "[image missing]"})
     else:
         content.append({"type": "text", "text": prompt})
 

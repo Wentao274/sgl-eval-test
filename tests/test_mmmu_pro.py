@@ -6,22 +6,47 @@ import pytest
 
 pytest.importorskip("PIL.Image")  # pillow ships with datasets
 
-from sgl_eval.evals._mmmu_pro import _image_media, _normalize_answer, load_mmmu_pro  # noqa: E402
+from sgl_eval.evals._mmmu_pro import (  # noqa: E402
+    _image_media,
+    _normalize_answer,
+    _parse_options,
+    load_mmmu_pro,
+)
 
 
-def _fake_row(idx="r1", answer="B", n_options=10, with_image=True):
+def _fake_row(
+    idx="r1",
+    answer="B",
+    n_options=10,
+    with_image=True,
+    *,
+    options=None,
+    question=None,
+    images=None,
+):
+    """Build a fake MMMU_Pro row on the real schema.
+
+    ``images`` maps an ``image_n`` column to a PIL image (referenced by
+    ``<image n>`` in the question); without it, ``with_image`` toggles a plain
+    ``image_1`` column. ``options`` may be a list or the HF literal-string form.
+    """
     from PIL import Image
 
-    return {
+    row = {
         "id": idx,
-        "question": f"Question {idx}?",
-        "options": [f"opt{i}" for i in range(n_options)],
+        "question": question or f"Question {idx}?",
+        "options": options if options is not None else [f"opt{i}" for i in range(n_options)],
         "answer": answer,
-        "image": Image.new("RGB", (8, 8)) if with_image else None,
         "subject": "Art",
-        "difficulty": "Easy",
-        "image_type": ["Paintings"],
+        "topic_difficulty": "Easy",
+        "img_type": ["Paintings"],
     }
+    if images is not None:
+        for n, img in images.items():
+            row[f"image_{n}"] = img
+    elif with_image:
+        row["image_1"] = Image.new("RGB", (8, 8))
+    return row
 
 
 def test_normalize_answer_letter():
@@ -69,6 +94,8 @@ def test_load_mmmu_pro_end_to_end(monkeypatch):
     assert len(ex0.media) == 1
     assert ex0.media[0].mime == "image/png"
     assert ex0.meta["subject"] == "Art"
+    assert ex0.meta["difficulty"] == "Easy"  # reads the topic_difficulty column
+    assert ex0.meta["image_type"] == ["Paintings"]  # reads the img_type column
 
     ex1 = examples[1]
     assert ex1.target == "J"
@@ -85,6 +112,103 @@ def test_load_mmmu_pro_num_examples(monkeypatch):
     )
     examples = load_mmmu_pro(num_examples=3)
     assert len(examples) == 3
+
+
+# --- primary paths the bugfix commits fixed (previously only fallbacks were tested) ---
+
+
+def test_options_literal_string_parsed_not_char_split(monkeypatch):
+    """HF stores options as a Python-literal string; must parse to a list, not
+    split per character (the original 9% bug)."""
+    import datasets
+
+    fake_ds = [_fake_row(options="['alpha','beta','gamma']", answer="C", with_image=False)]
+    monkeypatch.setattr(datasets, "load_dataset", lambda *a, **k: fake_ds)
+
+    [ex] = load_mmmu_pro()
+    assert "A) alpha" in ex.inputs["problem"]
+    assert "B) beta" in ex.inputs["problem"]
+    assert "C) gamma" in ex.inputs["problem"]
+    assert "D)" not in ex.inputs["problem"]  # 3 options -> A..C only
+
+
+def test_image_n_marker_picks_column_and_strips(monkeypatch):
+    """``<image n>`` picks the image_n column and is rewritten to ``[image]``."""
+    import datasets
+    from PIL import Image
+
+    fake_ds = [
+        _fake_row(
+            question="<image 2> What is shown?", answer="A", images={2: Image.new("RGB", (8, 8))}
+        )
+    ]
+    monkeypatch.setattr(datasets, "load_dataset", lambda *a, **k: fake_ds)
+
+    [ex] = load_mmmu_pro()
+    assert len(ex.media) == 1
+    assert "<image" not in ex.inputs["problem"]  # marker stripped
+    assert "[image]" in ex.inputs["problem"]  # rewritten to placeholder
+
+
+def test_two_markers_two_images(monkeypatch):
+    """Two ``<image n>`` markers resolve to two distinct images."""
+    import datasets
+    from PIL import Image
+
+    fake_ds = [
+        _fake_row(
+            question="<image 1> and <image 2>",
+            answer="A",
+            images={1: Image.new("RGB", (8, 8)), 2: Image.new("RGB", (8, 8))},
+        )
+    ]
+    monkeypatch.setattr(datasets, "load_dataset", lambda *a, **k: fake_ds)
+    [ex] = load_mmmu_pro()
+    assert len(ex.media) == 2
+
+
+# --- data-error rows warn + skip (loud, not a silent 0; not an abort) ---
+
+
+def test_missing_referenced_image_warns_and_skips(monkeypatch):
+    """A ``<image n>`` whose image_n column is missing is a data error -> skip."""
+    import datasets
+
+    fake_ds = [_fake_row(question="<image 3> here?", answer="A", with_image=False)]
+    monkeypatch.setattr(datasets, "load_dataset", lambda *a, **k: fake_ds)
+
+    with pytest.warns(UserWarning, match="skipping MMMU-Pro row"):
+        examples = load_mmmu_pro()
+    assert examples == []
+
+
+def test_options_not_list_warns_and_skips(monkeypatch):
+    """literal_eval returning a non-list (a bare quoted string) -> skip, not
+    per-character split (re-opens the 9% bug)."""
+    import datasets
+
+    fake_ds = [_fake_row(options="'just a string'", answer="A", with_image=False)]
+    monkeypatch.setattr(datasets, "load_dataset", lambda *a, **k: fake_ds)
+
+    with pytest.warns(UserWarning, match="skipping MMMU-Pro row"):
+        examples = load_mmmu_pro()
+    assert examples == []
+
+
+def test_empty_options_warns_and_skips(monkeypatch):
+    import datasets
+
+    fake_ds = [_fake_row(options=[], answer="A", with_image=False)]
+    monkeypatch.setattr(datasets, "load_dataset", lambda *a, **k: fake_ds)
+
+    with pytest.warns(UserWarning, match="skipping MMMU-Pro row"):
+        examples = load_mmmu_pro()
+    assert examples == []
+
+
+def test_parse_options_direct():
+    assert _parse_options({"options": "['x','y']"}) == ["x", "y"]
+    assert _parse_options({"options": ["a", "b"]}) == ["a", "b"]
 
 
 def test_mmmu_pro_registered():
