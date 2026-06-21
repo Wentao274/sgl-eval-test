@@ -221,13 +221,12 @@ def test_mmmu_pro_registered():
     assert "MMMU-Pro" in spec.description
 
 
-def test_max_tokens_pinned_only_for_mmmu_pro():
-    """The 32k max_tokens ceiling is an MMMU-Pro-only override (its reasoning
-    model emits long CoT before the answer); every other benchmark keeps the
-    NS-aligned ``max_tokens=None`` (server picks). Pinning it globally would
-    cap existing benchmarks."""
+def test_max_tokens_not_pinned_for_any_benchmark():
+    """No benchmark pins max_tokens; every benchmark keeps the NS-aligned
+    ``max_tokens=None`` (server picks the cap). A 100-sample A/B on
+    Qwen3.5-35B-A3B showed an uncapped MMMU-Pro run matches a 32k cap within
+    noise with no truncated/empty generations, so the cap is unnecessary."""
     from sgl_eval.registry import get
 
-    assert get("mmmu_pro").default_gen.max_tokens == 32768
-    for name in ("gsm8k", "aime24", "aime25", "mmlu", "gpqa"):
+    for name in ("gsm8k", "aime24", "aime25", "mmlu", "gpqa", "mmmu_pro"):
         assert get(name).default_gen.max_tokens is None, f"{name} should not pin max_tokens"
