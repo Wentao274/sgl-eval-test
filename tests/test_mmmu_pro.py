@@ -221,6 +221,16 @@ def test_mmmu_pro_registered():
     assert "MMMU-Pro" in spec.description
 
 
+def test_mmmu_pro_prompt_packaged():
+    """The SE-own 10-choice prompt must ship in the installed package -- the
+    vendored prompts are declared in pyproject package-data, but this one is
+    not, and ``_resolve_prompt`` returns a path ``render_prompt`` reads at
+    run time. A missing file crashes the first MMMU-Pro run, not import."""
+    from sgl_eval.evals._registry import _resolve_prompt
+
+    assert _resolve_prompt("mcq-10choices").exists()
+
+
 def test_max_tokens_not_pinned_for_any_benchmark():
     """No benchmark pins max_tokens; every benchmark keeps the NS-aligned
     ``max_tokens=None`` (server picks the cap). A 100-sample A/B on

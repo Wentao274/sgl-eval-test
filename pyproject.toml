@@ -79,6 +79,7 @@ exclude = ["tests*", "scripts*"]
     "dataset/*/__init__.py",
     "dataset/*/test.txt",
 ]
+"sgl_eval.evals" = ["prompts/*.yaml"]
 
 [tool.ruff]
 target-version = "py310"
