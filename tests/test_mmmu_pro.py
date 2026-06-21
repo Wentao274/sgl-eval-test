@@ -219,3 +219,15 @@ def test_mmmu_pro_registered():
     assert spec.category == "multichoice"
     assert spec.default_n_repeats == 1
     assert "MMMU-Pro" in spec.description
+
+
+def test_max_tokens_pinned_only_for_mmmu_pro():
+    """The 32k max_tokens ceiling is an MMMU-Pro-only override (its reasoning
+    model emits long CoT before the answer); every other benchmark keeps the
+    NS-aligned ``max_tokens=None`` (server picks). Pinning it globally would
+    cap existing benchmarks."""
+    from sgl_eval.registry import get
+
+    assert get("mmmu_pro").default_gen.max_tokens == 32768
+    for name in ("gsm8k", "aime24", "aime25", "mmlu", "gpqa"):
+        assert get(name).default_gen.max_tokens is None, f"{name} should not pin max_tokens"

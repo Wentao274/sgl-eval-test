@@ -20,6 +20,12 @@ Users override per run via CLI flags. ``temperature`` in particular is a
 model property -- DSv3.2/V4 want 1.0, R1 wants 0.6, etc. -- and pinning a
 single value here would encode a model-specific assumption.
 
+The one exception is ``max_tokens``: an entry may opt in to a per-benchmark
+ceiling via the optional ``max_tokens`` field. MMMU-Pro sets it to 32k because
+its reasoning model emits long CoT before the final answer that may not
+converge before EOS; other benchmarks stay at ``None`` (server picks),
+matching the NS-aligned default.
+
 ``metrics_type`` and the prompt yaml basename are derived at registration
 time from the vendored ``dataset/<name>/__init__.py`` (``METRICS_TYPE`` +
 ``GENERATION_ARGS``), so we never hand-mirror upstream's per-benchmark
@@ -90,6 +96,11 @@ _TABLE = [
         "prompt": "mcq-10choices",
         "loader_fn": lambda num_examples: load_mmmu_pro("test", num_examples),
         "thinking": False,
+        # Reasoning model emits long CoT before the final answer that may not
+        # converge before EOS; opt in to a 32k ceiling here rather than capping
+        # every benchmark. (The exact failure mode of an uncapped run is still
+        # under investigation; the ceiling is kept as a defensive default.)
+        "max_tokens": 32768,
         "default_n_repeats": 1,
         "description": "MMMU-Pro (multimodal, 10-choice, vision-dependent).",
     },
@@ -122,15 +133,14 @@ def _resolve_prompt(basename: str) -> Path:
     return _SE_PROMPT_DIR / f"{basename}.yaml"
 
 
-def _build_default_gen(thinking: bool) -> GenConfig:
-    """All NS-aligned defaults (``temperature=0.0``, ``top_p=0.95``); only
-    ``chat_template_kwargs.thinking`` varies. ``max_tokens`` is raised to 32k
-    so reasoning benchmarks (which emit long CoT before the final answer) are
-    not truncated before the answer is generated -- non-reasoning generations
-    stay short and are unaffected by the higher ceiling."""
+def _build_default_gen(entry: dict) -> GenConfig:
+    """All NS-aligned defaults (``temperature=0.0``, ``top_p=0.95``,
+    ``max_tokens=None``); only ``chat_template_kwargs.thinking`` varies. A
+    benchmark may opt in to a ``max_tokens`` ceiling via its registry entry
+    (e.g. MMMU-Pro); otherwise ``None`` is kept and the server picks."""
     return GenConfig(
-        chat_template_kwargs={"thinking": True} if thinking else None,
-        max_tokens=32768,
+        chat_template_kwargs={"thinking": True} if entry.get("thinking") else None,
+        max_tokens=entry.get("max_tokens"),
     )
 
 
@@ -217,7 +227,7 @@ for _entry in _TABLE:
             name=_name,
             category=_metrics_type,
             description=_entry["description"],
-            default_gen=_build_default_gen(_entry["thinking"]),
+            default_gen=_build_default_gen(_entry),
             default_n_repeats=_entry["default_n_repeats"],
             run=_run,
         )
