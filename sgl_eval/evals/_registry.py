@@ -20,11 +20,6 @@ Users override per run via CLI flags. ``temperature`` in particular is a
 model property -- DSv3.2/V4 want 1.0, R1 wants 0.6, etc. -- and pinning a
 single value here would encode a model-specific assumption.
 
-``max_tokens=None`` (server picks the cap) is kept for every benchmark
-including MMMU-Pro: a 100-sample A/B on Qwen3.5-35B-A3B showed an uncapped
-run (82.65%) matches a 32k cap (84%) within noise, with no truncated/empty
-generations -- so pinning a ceiling there is unnecessary.
-
 ``metrics_type`` and the prompt yaml basename are derived at registration
 time from the vendored ``dataset/<name>/__init__.py`` (``METRICS_TYPE`` +
 ``GENERATION_ARGS``), so we never hand-mirror upstream's per-benchmark
