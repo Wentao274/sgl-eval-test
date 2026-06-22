@@ -114,9 +114,6 @@ def test_load_mmmu_pro_num_examples(monkeypatch):
     assert len(examples) == 3
 
 
-# --- primary paths the bugfix commits fixed (previously only fallbacks were tested) ---
-
-
 def test_options_literal_string_parsed_not_char_split(monkeypatch):
     """HF stores options as a Python-literal string; must parse to a list, not
     split per character (the original 9% bug)."""
@@ -165,9 +162,6 @@ def test_two_markers_two_images(monkeypatch):
     monkeypatch.setattr(datasets, "load_dataset", lambda *a, **k: fake_ds)
     [ex] = load_mmmu_pro()
     assert len(ex.media) == 2
-
-
-# --- data-error rows warn + skip (loud, not a silent 0; not an abort) ---
 
 
 def test_missing_referenced_image_warns_and_skips(monkeypatch):
@@ -233,9 +227,7 @@ def test_mmmu_pro_prompt_packaged():
 
 def test_max_tokens_not_pinned_for_any_benchmark():
     """No benchmark pins max_tokens; every benchmark keeps the NS-aligned
-    ``max_tokens=None`` (server picks the cap). A 100-sample A/B on
-    Qwen3.5-35B-A3B showed an uncapped MMMU-Pro run matches a 32k cap within
-    noise with no truncated/empty generations, so the cap is unnecessary."""
+    ``max_tokens=None`` (server picks the cap)."""
     from sgl_eval.registry import get
 
     for name in ("gsm8k", "aime24", "aime25", "mmlu", "gpqa", "mmmu_pro"):

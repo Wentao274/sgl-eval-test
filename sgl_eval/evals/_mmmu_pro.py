@@ -55,7 +55,7 @@ def load_mmmu_pro(split: str = "test", num_examples: Optional[int] = None) -> Li
 def _build_example(row, i: int) -> Example:
     question = row["question"]
     images = _images_for_question(row, question)
-    # Strip the raw <image n> markers; the image rides as a media block.
+    # Replace <image n> with [image] so build_user_content splices it in place.
     question = _IMAGE_REF_RE.sub("[image]" if images else "", question)
     options = _parse_options(row)
     answer = _normalize_answer(row.get("answer"))

@@ -17,7 +17,6 @@ def test_no_media_returns_plain_string():
 def test_example_media_defaults_empty():
     ex = Example(id="x", inputs={}, target="A")
     assert ex.media == []
-    # text-benchmark path: no media -> string content
     assert build_user_content("p", ex.media) == "p"
 
 

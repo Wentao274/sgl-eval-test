@@ -27,9 +27,7 @@ def build_user_content(prompt: str, media: List[MediaItem]) -> ContentType:
     """Render a user message ``content`` for the given prompt + media.
 
     No media -> plain string (text-benchmark path, unchanged). Images inline
-    as ``data:`` base64; video uses a URL (too large to inline). The video
-    block name is provider-specific (OpenAI ``input_video`` / sglang
-    ``video_url``) and is settled when a video benchmark is wired up.
+    as ``data:`` base64; video uses a ``video_url`` block (too large to inline).
     """
     if not media:
         return prompt
@@ -54,7 +52,7 @@ def build_user_content(prompt: str, media: List[MediaItem]) -> ContentType:
     else:
         content.append({"type": "text", "text": prompt})
 
-    # Append any non-image media (video) and images that had no placeholder.
+    # Append media not consumed above (video, and images with no placeholder).
     inserted_images = image_idx
     for m in media:
         if m.kind == "image":
