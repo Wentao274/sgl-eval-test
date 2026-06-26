@@ -1,8 +1,11 @@
-# sgl-eval prompt for 10-choice multimodal benchmarks (e.g. MMMU-Pro). SE-own
-# (NeMo-Skills upstream has no 10-choice config). Same shape as the vendored
-# mcq-4choices.yaml; rendered by sgl_eval.evals._prompts.render_prompt.
+# sgl-eval prompt for MMMU-Pro (multimodal, variable-choice). SE-own
+# (NeMo-Skills upstream has no MMMU-Pro). Aligns with the official MMMU-Pro
+# cot/standard prompt: "$LETTER ... one of the options" adapts to the
+# variable option count (MMMU-Pro ships 4-10 options per question) instead
+# of hardcoding A-J; "Think step by step" elicits CoT from reasoning models.
+# Rendered by sgl_eval.evals._prompts.render_prompt.
 
 user: |-
-  Answer the following multiple choice question. The last line of your response should be in the following format: 'Answer: A/B/C/D/E/F/G/H/I/J' (e.g. 'Answer: A').
+  Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of the options. Think step by step before answering.
 
   {problem}
