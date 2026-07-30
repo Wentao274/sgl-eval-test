@@ -26,3 +26,11 @@ sgl_eval/_vendored/nemo_skills/dataset/mmlu/data.tar
 sgl_eval/_vendored/nemo_skills/dataset/gpqa/*.jsonl
 
 /preset_config/
+
+# CI/CD artifacts:
+#   output/  — run_eval.py 的远程结果根目录(<tester>/<build>/<chip>/<model>/<timestamp>/...)
+#   reports/ — Jenkins stage "拉取测试结果" 拉回本地的副本
+#   builds/  — Jenkins 拉取的连通性预检日志等(builds/<build_number>/...)
+/output/
+/reports/
+/builds/
