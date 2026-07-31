@@ -1,6 +1,6 @@
 pipeline {
     agent {
-        label 'slave-2'
+        label 'master'
     }
     parameters {
         string(name: 'TESTER', defaultValue: 'liwt', description: '测试人员名称(必填)')
@@ -8,7 +8,7 @@ pipeline {
         choice(name: 'ENGINE', choices: ['vllm', 'sglang'], description: '推理框架(必填)')
         choice(name: 'PD', choices: ['agg', 'disagg'], description: 'PD分离模式(agg=非PD分离,disagg=PD分离)')
         string(name: 'MODEL', defaultValue: 'glm-5.2', description: '模型服务名称(必填,对应 sgl-eval --model)')
-        string(name: 'BASE_URL', defaultValue: 'http://10.201.149.34:8000/v1', description: 'OpenAI 兼容端点 URL(必填)')
+        string(name: 'BASE_URL', defaultValue: 'http://10.201.149.34:8000', description: 'OpenAI 兼容端点根 URL(必填,不带 /v1 后缀,流水线会自动拼接)')
         password(name: 'API_KEY', defaultValue: '', description: 'API Key(可选,无需认证时留空)')
 
         // 各基准一个 boolean,与 lm-evaluation-harness 风格一致
@@ -21,11 +21,11 @@ pipeline {
         booleanParam(name: 'TASK_MMMU_PRO', defaultValue: false, description: '运行 mmmu_pro (多模态 10 选择,single-shot)')
 
         string(name: 'EXAMPLES',     defaultValue: '',    description: '样本数限制(空 = 不限制,跑全集)')
-        string(name: 'N_REPEATS',    defaultValue: '1',   description: '每题采样次数(默认 1;清空 = 各基准 registry 默认:gsm8k/mmlu=1, aime=16, gpqa=8)')
-        string(name: 'NUM_THREADS',  defaultValue: '1',   description: '并发线程数(默认 1)')
+        string(name: 'N_REPEATS',    defaultValue: '',   description: '每题采样次数(空 = 各基准 registry 默认:gsm8k/mmlu=1, aime=16, gpqa=8;填值则按该值执行)')
+        string(name: 'NUM_THREADS',  defaultValue: '5',   description: '并发线程数(默认 5)')
         string(name: 'TEMPERATURE',  defaultValue: '0.0', description: '采样温度(默认 0.0;reasoning 模型按需调 0.6/1.0)')
         string(name: 'TOP_P',        defaultValue: '0.95', description: 'nucleus top_p(默认 0.95)')
-        string(name: 'MAX_TOKENS',   defaultValue: '32768', description: '生成最大 token 数(默认 32768;清空 = 不指定)')
+        string(name: 'MAX_TOKENS',   defaultValue: '65536', description: '生成最大 token 数(默认 65536;清空 = 不指定)')
         choice(name: 'THINKING',     choices: ['', 'true', 'false'], description: '覆盖 thinking 模式(空=用各基准默认:gsm8k/mmlu=false,aime/gpqa=true)')
         text(name: 'TASK_MAX_TOKENS_JSON', defaultValue: '', description: '按任务覆盖 max_tokens 的 JSON,例: {"aime25":32768,"gpqa":32768}')
 
@@ -37,6 +37,12 @@ pipeline {
         SSH_CREDENTIALS = 'HOST_SSH_KEY'
         REMOTE_HOST = '10.201.132.50'
         REMOTE_USER = 'root'
+        // 用户在 BASE_URL 填根地址(可不带或带 /v1,可带或不带尾斜杠)。
+        // 这里 idempotent 拼接出唯一的 OpenAI 兼容端点:
+        //   先剥尾斜杠 → 再剥结尾 /v1(若有)→ 统一补 /v1
+        // 例: http://h:8000 | http://h:8000/ | http://h:8000/v1 | http://h:8000/v1/
+        //     都得到 http://h:8000/v1
+        BASE_URL_V1 = "${params.BASE_URL.replaceAll('/+\$', '').replaceAll('/?v1\$', '')}/v1"
     }
 
     stages {
@@ -51,7 +57,7 @@ pipeline {
                     println("推理框架:        ${params.ENGINE}")
                     println("PD分离模式:      ${params.PD}")
                     println("模型名称:        ${params.MODEL}")
-                    println("BASE_URL:        ${params.BASE_URL}")
+                    println("BASE_URL:        ${params.BASE_URL}  (→ ${env.BASE_URL_V1})")
                     println("任务 GSM8K:      ${params.TASK_GSM8K}")
                     println("任务 AIME24:     ${params.TASK_AIME24}")
                     println("任务 AIME25:     ${params.TASK_AIME25}")
@@ -85,15 +91,15 @@ ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} << 'ENDSSH'
 set -o pipefail
 {
     echo "=== 检查 API 连通性 (/v1/models) ==="
-    HTTP_CODE=\$(curl -s --connect-timeout 10 -m 30 -o /dev/null -w "%{http_code}" ${params.BASE_URL}/models)
+    HTTP_CODE=\$(curl -s --connect-timeout 10 -m 30 -o /dev/null -w "%{http_code}" ${env.BASE_URL_V1}/models)
     if [ "\${HTTP_CODE}" != "200" ]; then
-        echo "ERROR: API 连通性检查失败, HTTP状态码: \${HTTP_CODE}, URL: ${params.BASE_URL}/models"
+        echo "ERROR: API 连通性检查失败, HTTP状态码: \${HTTP_CODE}, URL: ${env.BASE_URL_V1}/models"
         exit 1
     fi
     echo "API /models 连通性检查通过, HTTP状态码: \${HTTP_CODE}"
 
     echo "=== 检查 Chat Completions 接口 ==="
-    CHAT_RESP=\$(curl -s --connect-timeout 10 -m 60 -w "\\n%{http_code}" ${params.BASE_URL}/chat/completions \\
+    CHAT_RESP=\$(curl -s --connect-timeout 10 -m 60 -w "\\n%{http_code}" ${env.BASE_URL_V1}/chat/completions \\
         -H "Content-Type: application/json" \\
         -d '{"model":"${params.MODEL}","messages":[{"role":"user","content":"hello"}],"max_tokens":10}')
     CHAT_HTTP_CODE=\$(echo "\${CHAT_RESP}" | tail -1)
@@ -130,20 +136,26 @@ echo "工作目录: \$(pwd)"
 ls -la
 
 echo "=== 清理残留进程 (sgl-eval / run_eval) ==="
-RESIDUAL=\$(pgrep -af "sgl-eval|run_eval" 2>/dev/null || true)
+# 注意:pgrep -af 会全命令行匹配。Jenkins durable wrapper 的命令行里含
+# 工作空间路径 ".../workspace/sgl-eval-test@tmp/...",会撞上 "sgl-eval" 关键字
+# 被误杀,导致 sh step 异常终止。这里用更精确的模式:
+#   - "sgl-eval run"      :真正的 sgl-eval 运行命令(必带 run 子命令)
+#   - "run_eval.py"       :我们的编排脚本
+#   - 排除含 "jenkins" / "durable" / "@tmp" 的 Jenkins 内部进程
+RESIDUAL=\$(pgrep -af "sgl-eval run|run_eval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
 if [ -n "\${RESIDUAL}" ]; then
     echo "发现残留进程:"
     echo "\${RESIDUAL}"
     echo "发送 SIGTERM..."
     echo "\${RESIDUAL}" | awk '{print \$1}' | xargs -r kill -TERM 2>/dev/null || true
     sleep 3
-    REMAINING=\$(pgrep -af "sgl-eval|run_eval" 2>/dev/null || true)
+    REMAINING=\$(pgrep -af "sgl-eval run|run_eval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
     if [ -n "\${REMAINING}" ]; then
         echo "残留进程未响应 SIGTERM,发送 SIGKILL..."
         echo "\${REMAINING}" | awk '{print \$1}' | xargs -r kill -KILL 2>/dev/null || true
         sleep 1
     fi
-    FINAL=\$(pgrep -af "sgl-eval|run_eval" 2>/dev/null || true)
+    FINAL=\$(pgrep -af "sgl-eval run|run_eval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
     if [ -n "\${FINAL}" ]; then
         echo "WARN: 以下残留进程仍存在,需人工介入:"
         echo "\${FINAL}"
@@ -219,7 +231,7 @@ python3 run_eval.py \\
     --build-number ${BUILD_NUMBER} \\
     --chip ${params.CHIP} \\
     --model ${params.MODEL} \\
-    --base-url ${params.BASE_URL} \\
+    --base-url ${env.BASE_URL_V1} \\
     --api-key "${env.API_KEY_STR ?: 'EMPTY'}" \\
     --tasks ${env.TASKS} \\
     --examples "${params.EXAMPLES}" \\

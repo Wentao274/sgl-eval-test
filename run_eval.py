@@ -38,13 +38,15 @@ def parse_args():
     )
     parser.add_argument("--examples", default="", help="样本数限制(空 = 不限制)")
     parser.add_argument(
-        "--n-repeats", default="1", help="每题采样次数(默认 1;空 = 用各基准的 registry 默认)"
+        "--n-repeats",
+        default="",
+        help="每题采样次数(空 = 用各基准的 registry 默认;填值则按该值执行)",
     )
-    parser.add_argument("--num-threads", default="1", help="并发线程数(默认 1)")
+    parser.add_argument("--num-threads", default="5", help="并发线程数(默认 5)")
     parser.add_argument("--temperature", default="0.0", help="采样温度(默认 0.0)")
     parser.add_argument("--top-p", default="0.95", help="nucleus top_p(默认 0.95)")
     parser.add_argument(
-        "--max-tokens", default="32768", help="生成最大 token 数(默认 32768;空 = 不指定)"
+        "--max-tokens", default="65536", help="生成最大 token 数(默认 65536;空 = 不指定)"
     )
     parser.add_argument(
         "--thinking",

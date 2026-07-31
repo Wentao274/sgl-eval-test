@@ -89,24 +89,24 @@ Jenkins 通过 ssh 远程到 `REMOTE_HOST`(默认 `10.201.132.50`)在 `WORK_DIR`
 
 ## 4. Jenkins 参数清单(对应需求 #7 的「更多 sgl-eval 参数」)
 
-| Jenkins 参数 | 对应 sgl-eval flag | 默认 | 说明 |
-|--------------|---------------------|------|------|
-| `TESTER` | — | `liwt` | 测试人员(目录分层用) |
-| `CHIP` | — | `nvidia-h100` | 芯片平台(目录分层用) |
-| `ENGINE` / `PD` | — | `vllm` / `agg` | 仅邮件展示,不传 sgl-eval |
-| `MODEL` | `--model` | `glm-5.2` | 模型服务名 |
+| Jenkins 参数 | 对应 sgl-eval flag | 默认                             | 说明 |
+|--------------|---------------------|--------------------------------|------|
+| `TESTER` | — | `liwt`                         | 测试人员(目录分层用) |
+| `CHIP` | — | `nvidia-h100`                  | 芯片平台(目录分层用) |
+| `ENGINE` / `PD` | — | `vllm` / `agg`                 | 仅邮件展示,不传 sgl-eval |
+| `MODEL` | `--model` | `glm-5.2`                      | 模型服务名 |
 | `BASE_URL` | `--base-url` | `http://10.201.149.34:8000/v1` | 端点 |
-| `API_KEY` | `--api-key` | 空 → `EMPTY` | 鉴权 |
-| `TASK_GSM8K` / `TASK_AIME24` / `TASK_AIME25` / `TASK_AIME26` / `TASK_MMLU` / `TASK_GPQA` / `TASK_MMMU_PRO` | 位置参数 `<name>` | 见各 checkbox | 7 个基准一个 boolean,勾选后逗号拼接传 `--tasks` |
-| `EXAMPLES` | `--num-examples` | 空 | 空 = 跑全集 |
-| `N_REPEATS` | `--n-repeats` | `1` | 清空 = 用各基准的 registry 默认(gsm8k/mmlu=1,aime=16,gpqa=8) |
-| `NUM_THREADS` | `--num-threads` | `1` | 并发线程数 |
-| `TEMPERATURE` | `--temperature` | `0.0` | reasoning 模型按需调到 0.6/1.0 |
-| `TOP_P` | `--top-p` | `0.95` | nucleus |
-| `MAX_TOKENS` | `--max-tokens` | `32768` | 清空 = 不指定(NS 默认 None) |
-| `THINKING` | `--thinking` / `--no-thinking` | 空 | 空 = 用各基准 registry 默认 |
-| `TASK_MAX_TOKENS_JSON` | (shell 内 per-task 覆盖) | 空 | 例 `{"aime25":32768,"gpqa":32768}` |
-| `DESCRIPTION` / `RECIPIENTS` / `WORK_DIR` | — | — | 元信息/邮件收件人/远程目录 |
+| `API_KEY` | `--api-key` | 空 → `EMPTY`                    | 鉴权 |
+| `TASK_GSM8K` / `TASK_AIME24` / `TASK_AIME25` / `TASK_AIME26` / `TASK_MMLU` / `TASK_GPQA` / `TASK_MMMU_PRO` | 位置参数 `<name>` | 见各 checkbox                    | 7 个基准一个 boolean,勾选后逗号拼接传 `--tasks` |
+| `EXAMPLES` | `--num-examples` | 空                              | 空 = 跑全集 |
+| `N_REPEATS` | `--n-repeats` | 空                              | 空 = 用各基准的 registry 默认(gsm8k/mmlu=1,aime=16,gpqa=8);填值则按该值执行 |
+| `NUM_THREADS` | `--num-threads` | `5`                            | 并发线程数 |
+| `TEMPERATURE` | `--temperature` | `0.0`                          | reasoning 模型按需调到 0.6/1.0 |
+| `TOP_P` | `--top-p` | `0.95`                         | nucleus |
+| `MAX_TOKENS` | `--max-tokens` | `65536`                        | 清空 = 不指定(NS 默认 None) |
+| `THINKING` | `--thinking` / `--no-thinking` | 空                              | 空 = 用各基准 registry 默认 |
+| `TASK_MAX_TOKENS_JSON` | (shell 内 per-task 覆盖) | 空                              | 例 `{"aime25":32768,"gpqa":32768}` |
+| `DESCRIPTION` / `RECIPIENTS` / `WORK_DIR` | — | —                              | 元信息/邮件收件人/远程目录 |
 
 **为什么有 `TASK_MAX_TOKENS_JSON`:** sgl-eval 的 `--max-tokens` 是全局的,但
 不同基准对最 long-tail 长度需求差异极大(AIME 要长 thinking、gsm8k 不需要)。
