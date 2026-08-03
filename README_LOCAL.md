@@ -15,11 +15,11 @@
 | 文件 | 角色 | 对应 lm-evaluation-harness |
 |------|------|-----------------------------|
 | `sgl_eval_main.sh` | shell 主入口,定义 `run_task` 函数 | `lm_eval_test.sh` |
-| `run_eval.py` | Python 编排器,Jenkins → shell 的桥 | `run_eval.py` |
+| `run_sgleval.py` | Python 编排器,Jenkins → shell 的桥 | `run_eval.py` |
 | `Jenkinsfile` | Jenkins 声明式流水线 | `Jenkinsfile` |
 
 `sgl_eval_main.sh` 不会自己读 Jenkins 参数;它通过环境变量接收所有配置,
-由 `run_eval.py` 统一注入——与上游 lm-evaluation-harness 完全相同的分层。
+由 `run_sgleval.py` 统一注入——与上游 lm-evaluation-harness 完全相同的分层。
 
 ---
 
@@ -58,10 +58,10 @@ OUTPUT_BASE=./output/smoke \
 bash sgl_eval_main.sh
 ```
 
-### 3.2 通过 run_eval.py 编排(本地复现 Jenkins 行为)
+### 3.2 通过 run_sgleval.py 编排(本地复现 Jenkins 行为)
 
 ```bash
-python3 run_eval.py \
+python3 run_sgleval.py \
     --tester liwt \
     --build-number manual001 \
     --chip nvidia-h100 \
@@ -74,7 +74,7 @@ python3 run_eval.py \
     --thinking true
 ```
 
-`run_eval.py` 会:
+`run_sgleval.py` 会:
 1. 创建 `./output/liwt/manual001/nvidia-h100/glm-5.2/<timestamp>/`
 2. 设置环境变量(`MODEL_NAME` / `DATASETS` / `LLM_ADDR` / `OUTPUT_BASE` / ...)
 3. 调 `bash sgl_eval_main.sh`,透传退出码
@@ -83,7 +83,7 @@ python3 run_eval.py \
 
 打开 Jenkins job → Build with Parameters → 勾选任务、填端点 → 构建。
 Jenkins 通过 ssh 远程到 `REMOTE_HOST`(默认 `10.201.132.50`)在 `WORK_DIR` 下
-跑 `run_eval.py`,完成后 scp 拉回结果、归档、发邮件。
+跑 `run_sgleval.py`,完成后 scp 拉回结果、归档、发邮件。
 
 ---
 
@@ -135,7 +135,7 @@ Jenkins 通过 ssh 远程到 `REMOTE_HOST`(默认 `10.201.132.50`)在 `WORK_DIR`
 | flag | 类型 | 说明 | 是否在 Jenkins 中暴露 |
 |------|------|------|-----------------------|
 | `--from-dataset <path>` | str | 用自定义 NS-shape jsonl 替换 vendored 数据集 | 否(实验性) |
-| `--out-dir <path>` | str | run 目录父目录,默认 `~/.sgl_eval` | 否(由 `run_eval.py` 固定到 `OUTPUT_BASE`) |
+| `--out-dir <path>` | str | run 目录父目录,默认 `~/.sgl_eval` | 否(由 `run_sgleval.py` 固定到 `OUTPUT_BASE`) |
 | `--no-dump-predictions` | flag | 不写 `output-rs*.jsonl` | 否(默认要保留预测流) |
 | `--preset <name>` | str | 加载 `~/.sgl_eval/presets/<name>.yaml` | 否(与显式参数冲突) |
 

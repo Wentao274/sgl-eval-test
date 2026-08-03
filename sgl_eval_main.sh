@@ -3,7 +3,7 @@
 #
 # 设计参照 lm-evaluation-harness/lm_eval_test.sh:
 #   - 顶层定义 run_task 函数,每个任务调用一次
-#   - 通过环境变量接收运行期参数(由 run_eval.py 设置)
+#   - 通过环境变量接收运行期参数(由 run_sgleval.py 设置)
 #   - 所有输出 tee 到统一日志文件,便于 Jenkins 邮件解析
 #
 # run_task 函数签名(需求 #1):

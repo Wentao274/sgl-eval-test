@@ -9,6 +9,8 @@
 4. 透传退出码
 
 与 lm-evaluation-harness/run_eval.py 的差异:
+   - 本仓库编排脚本命名为 run_sgleval.py(避免与其他测试框架的 run_eval.py 混淆,
+     Jenkinsfile 清理残留进程时按全字符串 run_sgleval.py 匹配,不会误杀其他框架)
    - 不传 --model-path(sgl-eval 只用 OpenAI 兼容接口,不需要 tokenizer)
    - 增加 --n-repeats / --max-tokens / --thinking 等 sgl-eval 专属参数
    - 多任务由 --tasks 逗号分隔,在一次 bash 调用里串行执行

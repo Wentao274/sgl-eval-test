@@ -135,27 +135,28 @@ cd ${params.WORK_DIR}
 echo "工作目录: \$(pwd)"
 ls -la
 
-echo "=== 清理残留进程 (sgl-eval / run_eval) ==="
+echo "=== 清理残留进程 (sgl-eval / run_sgleval) ==="
 # 注意:pgrep -af 会全命令行匹配。Jenkins durable wrapper 的命令行里含
 # 工作空间路径 ".../workspace/sgl-eval-test@tmp/...",会撞上 "sgl-eval" 关键字
-# 被误杀,导致 sh step 异常终止。这里用更精确的模式:
+# 被误杀,导致 sh step 异常终止。这里用更精确的"全字符串"匹配:
 #   - "sgl-eval run"      :真正的 sgl-eval 运行命令(必带 run 子命令)
-#   - "run_eval.py"       :我们的编排脚本
+#   - "run_sgleval.py"    :我们的编排脚本(改用全字符串,避免命中其他框架的 run_eval.py / run_eval_xxx.py)
 #   - 排除含 "jenkins" / "durable" / "@tmp" 的 Jenkins 内部进程
-RESIDUAL=\$(pgrep -af "sgl-eval run|run_eval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
+# pgrep -f 的 pattern 默认做正则匹配,转义为普通字符串以确保整串相等而非子串正则。
+RESIDUAL=\$(pgrep -af "sgl-eval run|run_sgleval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
 if [ -n "\${RESIDUAL}" ]; then
     echo "发现残留进程:"
     echo "\${RESIDUAL}"
     echo "发送 SIGTERM..."
     echo "\${RESIDUAL}" | awk '{print \$1}' | xargs -r kill -TERM 2>/dev/null || true
     sleep 3
-    REMAINING=\$(pgrep -af "sgl-eval run|run_eval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
+    REMAINING=\$(pgrep -af "sgl-eval run|run_sgleval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
     if [ -n "\${REMAINING}" ]; then
         echo "残留进程未响应 SIGTERM,发送 SIGKILL..."
         echo "\${REMAINING}" | awk '{print \$1}' | xargs -r kill -KILL 2>/dev/null || true
         sleep 1
     fi
-    FINAL=\$(pgrep -af "sgl-eval run|run_eval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
+    FINAL=\$(pgrep -af "sgl-eval run|run_sgleval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
     if [ -n "\${FINAL}" ]; then
         echo "WARN: 以下残留进程仍存在,需人工介入:"
         echo "\${FINAL}"
@@ -168,7 +169,7 @@ fi
 
 echo "=== 设置权限 ==="
 chmod +x sgl_eval_main.sh
-chmod +x run_eval.py
+chmod +x run_sgleval.py
 
 echo "=== 检查并创建虚拟环境 ==="
 if [ ! -d "${params.WORK_DIR}/.venv" ]; then
@@ -226,7 +227,7 @@ export LC_ALL=en_US.UTF-8
 cd ${params.WORK_DIR}
 source .venv/bin/activate
 echo "=== 执行Python测试脚本 ==="
-python3 run_eval.py \\
+python3 run_sgleval.py \\
     --tester ${params.TESTER} \\
     --build-number ${BUILD_NUMBER} \\
     --chip ${params.CHIP} \\
