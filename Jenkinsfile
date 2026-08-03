@@ -25,7 +25,7 @@ pipeline {
         string(name: 'NUM_THREADS',  defaultValue: '5',   description: '并发线程数(默认 5)')
         string(name: 'TEMPERATURE',  defaultValue: '0.0', description: '采样温度(默认 0.0;reasoning 模型按需调 0.6/1.0)')
         string(name: 'TOP_P',        defaultValue: '0.95', description: 'nucleus top_p(默认 0.95)')
-        string(name: 'MAX_TOKENS',   defaultValue: '65536', description: '生成最大 token 数(默认 65536;清空 = 不指定)')
+        string(name: 'MAX_TOKENS',   defaultValue: '131072', description: '生成最大 token 数(默认 131072;清空 = 不指定)')
         choice(name: 'THINKING',     choices: ['', 'true', 'false'], description: '覆盖 thinking 模式(空=用各基准默认:gsm8k/mmlu=false,aime/gpqa=true)')
         text(name: 'TASK_MAX_TOKENS_JSON', defaultValue: '', description: '按任务覆盖 max_tokens 的 JSON,例: {"aime25":32768,"gpqa":32768}')
 

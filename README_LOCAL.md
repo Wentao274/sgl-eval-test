@@ -103,7 +103,7 @@ Jenkins 通过 ssh 远程到 `REMOTE_HOST`(默认 `10.201.132.50`)在 `WORK_DIR`
 | `NUM_THREADS` | `--num-threads` | `5`                            | 并发线程数 |
 | `TEMPERATURE` | `--temperature` | `0.0`                          | reasoning 模型按需调到 0.6/1.0 |
 | `TOP_P` | `--top-p` | `0.95`                         | nucleus |
-| `MAX_TOKENS` | `--max-tokens` | `65536`                        | 清空 = 不指定(NS 默认 None) |
+| `MAX_TOKENS` | `--max-tokens` | `131072`                       | 清空 = 不指定(NS 默认 None) |
 | `THINKING` | `--thinking` / `--no-thinking` | 空                              | 空 = 用各基准 registry 默认 |
 | `TASK_MAX_TOKENS_JSON` | (shell 内 per-task 覆盖) | 空                              | 例 `{"aime25":32768,"gpqa":32768}` |
 | `DESCRIPTION` / `RECIPIENTS` / `WORK_DIR` | — | —                              | 元信息/邮件收件人/远程目录 |

@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument("--temperature", default="0.0", help="采样温度(默认 0.0)")
     parser.add_argument("--top-p", default="0.95", help="nucleus top_p(默认 0.95)")
     parser.add_argument(
-        "--max-tokens", default="65536", help="生成最大 token 数(默认 65536;空 = 不指定)"
+        "--max-tokens", default="131072", help="生成最大 token 数(默认 131072;空 = 不指定)"
     )
     parser.add_argument(
         "--thinking",
