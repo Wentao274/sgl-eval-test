@@ -1,6 +1,6 @@
 pipeline {
     agent {
-        label 'master'
+        label 'slave-2'
     }
     parameters {
         string(name: 'TESTER', defaultValue: 'liwt', description: '测试人员名称(必填)')
