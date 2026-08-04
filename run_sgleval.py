@@ -44,7 +44,7 @@ def parse_args():
         default="",
         help="每题采样次数(空 = 用各基准的 registry 默认;填值则按该值执行)",
     )
-    parser.add_argument("--num-threads", default="5", help="并发线程数(默认 5)")
+    parser.add_argument("--num-threads", default="8", help="并发线程数(默认 8)")
     parser.add_argument("--temperature", default="0.0", help="采样温度(默认 0.0)")
     parser.add_argument("--top-p", default="0.95", help="nucleus top_p(默认 0.95)")
     parser.add_argument(

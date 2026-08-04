@@ -22,7 +22,7 @@ pipeline {
 
         string(name: 'EXAMPLES',     defaultValue: '',    description: '样本数限制(空 = 不限制,跑全集)')
         string(name: 'N_REPEATS',    defaultValue: '',   description: '每题采样次数(空 = 各基准 registry 默认:gsm8k/mmlu=1, aime=16, gpqa=8;填值则按该值执行)')
-        string(name: 'NUM_THREADS',  defaultValue: '5',   description: '并发线程数(默认 5)')
+        string(name: 'NUM_THREADS',  defaultValue: '8',   description: '并发线程数(默认 8)')
         string(name: 'TEMPERATURE',  defaultValue: '0.0', description: '采样温度(默认 0.0;reasoning 模型按需调 0.6/1.0)')
         string(name: 'TOP_P',        defaultValue: '0.95', description: 'nucleus top_p(默认 0.95)')
         string(name: 'MAX_TOKENS',   defaultValue: '131072', description: '生成最大 token 数(默认 131072;清空 = 不指定)')

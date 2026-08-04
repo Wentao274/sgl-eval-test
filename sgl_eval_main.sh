@@ -16,7 +16,7 @@
 # 其余 sgl-eval 参数通过环境变量传入(需求 #7):
 #   API_KEY        OpenAI 风格 api key,默认 EMPTY
 #   N_REPEATS      每题重复采样次数,空 = 用 registry 默认
-#   NUM_THREADS    并发线程数,默认 64
+#   NUM_THREADS    并发线程数,默认 8
 #   TEMPERATURE    采样温度,默认 0.0
 #   TOP_P          nucleus 概率,默认 0.95
 #   MAX_TOKENS     生成最大 token 数,空 = 不指定(NS 默认 None)
@@ -39,7 +39,7 @@ API_KEY=${API_KEY:-EMPTY}
 OUTPUT_BASE=${OUTPUT_BASE:-./output}
 EXAMPLES=${EXAMPLES:-}
 N_REPEATS=${N_REPEATS:-}
-NUM_THREADS=${NUM_THREADS:-5}
+NUM_THREADS=${NUM_THREADS:-8}
 TEMPERATURE=${TEMPERATURE:-0.0}
 TOP_P=${TOP_P:-0.95}
 MAX_TOKENS=${MAX_TOKENS:-131072}

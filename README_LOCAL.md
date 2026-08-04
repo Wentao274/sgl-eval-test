@@ -100,7 +100,7 @@ Jenkins 通过 ssh 远程到 `REMOTE_HOST`(默认 `10.201.132.50`)在 `WORK_DIR`
 | `TASK_GSM8K` / `TASK_AIME24` / `TASK_AIME25` / `TASK_AIME26` / `TASK_MMLU` / `TASK_GPQA` / `TASK_MMMU_PRO` | 位置参数 `<name>` | 见各 checkbox                    | 7 个基准一个 boolean,勾选后逗号拼接传 `--tasks` |
 | `EXAMPLES` | `--num-examples` | 空                              | 空 = 跑全集 |
 | `N_REPEATS` | `--n-repeats` | 空                              | 空 = 用各基准的 registry 默认(gsm8k/mmlu=1,aime=16,gpqa=8);填值则按该值执行 |
-| `NUM_THREADS` | `--num-threads` | `5`                            | 并发线程数 |
+| `NUM_THREADS` | `--num-threads` | `8`                            | 并发线程数 |
 | `TEMPERATURE` | `--temperature` | `0.0`                          | reasoning 模型按需调到 0.6/1.0 |
 | `TOP_P` | `--top-p` | `0.95`                         | nucleus |
 | `MAX_TOKENS` | `--max-tokens` | `131072`                       | 清空 = 不指定(NS 默认 None) |
