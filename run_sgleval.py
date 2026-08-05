@@ -44,9 +44,15 @@ def parse_args():
         default="",
         help="每题采样次数(空 = 用各基准的 registry 默认;填值则按该值执行)",
     )
-    parser.add_argument("--num-threads", default="8", help="并发线程数(默认 8)")
-    parser.add_argument("--temperature", default="0.0", help="采样温度(默认 0.0)")
+    parser.add_argument("--num-threads", default="32", help="并发线程数(默认 32)")
     parser.add_argument("--top-p", default="0.95", help="nucleus top_p(默认 0.95)")
+    parser.add_argument(
+        "--task-temperature-json",
+        default="",
+        help='按任务覆盖 temperature 的 JSON,例: {"aime25":0.6,"gpqa":0.6};'
+        "留空则用 sgl_eval_main.sh 内置默认(R1 推荐:"
+        "gsm8k/mmlu/mmmu_pro=0.0, aime24/25/26/gpqa=0.6)",
+    )
     parser.add_argument(
         "--max-tokens", default="131072", help="生成最大 token 数(默认 131072;空 = 不指定)"
     )
@@ -95,7 +101,6 @@ def main():
     if args.n_repeats:
         env["N_REPEATS"] = args.n_repeats
     env["NUM_THREADS"] = args.num_threads
-    env["TEMPERATURE"] = args.temperature
     env["TOP_P"] = args.top_p
     if args.max_tokens:
         env["MAX_TOKENS"] = args.max_tokens
@@ -103,6 +108,8 @@ def main():
         env["THINKING"] = args.thinking
     if args.task_max_tokens_json:
         env["TASK_MAX_TOKENS_JSON"] = args.task_max_tokens_json
+    if args.task_temperature_json:
+        env["TASK_TEMPERATURE_JSON"] = args.task_temperature_json
 
     cmd = ["bash", shell_script]
 
@@ -118,11 +125,11 @@ def main():
         "EXAMPLES",
         "N_REPEATS",
         "NUM_THREADS",
-        "TEMPERATURE",
         "TOP_P",
         "MAX_TOKENS",
         "THINKING",
         "TASK_MAX_TOKENS_JSON",
+        "TASK_TEMPERATURE_JSON",
     ]:
         if k in env:
             print(f"  {k}={env[k]}")

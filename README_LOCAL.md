@@ -46,7 +46,8 @@
 ### 3.1 直接调 shell(本地 smoke)
 
 ```bash
-# 默认 gsm8k / 50 题 / localhost:30000
+# 默认 gsm8k / 50 题 / localhost:30000;温度用脚本内置 R1 推荐
+# (gsm8k=0.0,aime/gpqa=0.6)
 bash sgl_eval_main.sh
 
 # 通过环境变量覆盖
@@ -56,7 +57,19 @@ LLM_ADDR=http://10.201.149.34:8000/v1 \
 EXAMPLES=50 \
 OUTPUT_BASE=./output/smoke \
 bash sgl_eval_main.sh
+
+# 跑 DSv3.2/V4 时按任务覆盖温度(pass@k 类用 1.0):
+TASK_TEMPERATURE_JSON='{"gsm8k":0.0,"aime24":1.0,"aime25":1.0,"aime26":1.0,"mmlu":0.0,"gpqa":1.0,"mmmu_pro":0.0}' \
+DATASETS=aime24,aime25,gpqa \
+LLM_ADDR=http://10.201.149.34:8000/v1 \
+bash sgl_eval_main.sh
 ```
+
+`TASK_TEMPERATURE_JSON` 留空时回退到脚本内置 R1-family 默认
+(`sgl_eval_main.sh` 顶部 `_DEFAULT_TASK_TEMPERATURE_JSON`);填了则完全替换,
+未在 JSON 中的任务回退到 `0.0` greedy。温度是模型属性,按模型族选择:
+R1 系 `0.6`,DSv3.2/V4 `1.0`,通用 instruct `0.0`。
+OpenAI 兼容 API 下 `temperature > 0` 即等价 `do_sample=true`,无需额外开关。
 
 ### 3.2 通过 run_sgleval.py 编排(本地复现 Jenkins 行为)
 
@@ -69,10 +82,14 @@ python3 run_sgleval.py \
     --base-url http://10.201.149.34:8000/v1 \
     --tasks gsm8k,aime25 \
     --examples 50 \
-    --temperature 0.6 \
+    --task-temperature-json '{"aime25":0.6}' \
     --max-tokens 8192 \
     --thinking true
 ```
+
+`--task-temperature-json` 留空时 `run_sgleval.py` 不设 `TASK_TEMPERATURE_JSON`
+环境变量,`sgl_eval_main.sh` 会用内置 R1 推荐;填了则透传给 shell。
+未在 JSON 中的任务回退到 `0.0` greedy。
 
 `run_sgleval.py` 会:
 1. 创建 `./output/liwt/manual001/nvidia-h100/glm-5.2/<timestamp>/`
@@ -101,17 +118,25 @@ Jenkins 通过 ssh 远程到 `REMOTE_HOST`(默认 `10.201.132.50`)在 `WORK_DIR`
 | `EXAMPLES` | `--num-examples` | 空                              | 空 = 跑全集 |
 | `N_REPEATS` | `--n-repeats` | 空                              | 空 = 用各基准的 registry 默认(gsm8k/mmlu=1,aime=16,gpqa=8);填值则按该值执行 |
 | `NUM_THREADS` | `--num-threads` | `32`                           | 并发线程数 |
-| `TEMPERATURE` | `--temperature` | `0.0`                          | reasoning 模型按需调到 0.6/1.0 |
 | `TOP_P` | `--top-p` | `0.95`                         | nucleus |
 | `MAX_TOKENS` | `--max-tokens` | `131072`                       | 清空 = 不指定(NS 默认 None) |
 | `THINKING` | `--thinking` / `--no-thinking` | 空                              | 空 = 用各基准 registry 默认 |
 | `TASK_MAX_TOKENS_JSON` | (shell 内 per-task 覆盖) | 空                              | 例 `{"aime25":32768,"gpqa":32768}` |
+| `TASK_TEMPERATURE_JSON` | (shell 内 per-task 覆盖) | 空                              | 空 = 用脚本内置 R1 推荐(`gsm8k/mmlu/mmmu_pro=0.0, aime24/25/26/gpqa=0.6`);跑 DSv3.2/V4 时填 `{"aime24":1.0,...}` |
 | `DESCRIPTION` / `RECIPIENTS` / `WORK_DIR` | — | —                              | 元信息/邮件收件人/远程目录 |
 
 **为什么有 `TASK_MAX_TOKENS_JSON`:** sgl-eval 的 `--max-tokens` 是全局的,但
 不同基准对最 long-tail 长度需求差异极大(AIME 要长 thinking、gsm8k 不需要)。
 `sgl_eval_main.sh:_resolve_max_tokens` 在循环每个任务时按 JSON 覆盖,
 比多次 Jenkins 构建省事。
+
+**为什么有 `TASK_TEMPERATURE_JSON`(替代旧的全局 `TEMPERATURE`):**
+温度本质是**模型属性**而非全局开关 —— 同一个 Jenkins 任务里 `gsm8k/mmlu`
+greedy (`0.0`) 与 `aime/gpqa` pass@k stochastic (`0.6` for R1 / `1.0` for
+DSv3.2/V4) 必须并存,否则要么 AIME 16 次采样退化为同一样本(温度 0 +
+`n_repeats=16` 完全等价于单次,被 `sgl_eval/pipeline/setup.py:_warn_if_greedy_repeats`
+显式告警),要么非推理 benchmark 也被错用随机采样。`sgl_eval_main.sh:_resolve_temperature`
+在循环里按 JSON 取值,留空时回退到内置 R1-family 默认。
 
 ### 4.1 各基准的 registry 默认值(来自 `_registry.py:_TABLE`)
 
@@ -166,6 +191,6 @@ Jenkins 通过 ssh 远程到 `REMOTE_HOST`(默认 `10.201.132.50`)在 `WORK_DIR`
 | ping 输出空 response | reasoning 模型默认 `--max-tokens 64` 太小,被 thinking 吃满;调到 1024+ |
 | gsm8k 大量 `no_answer` | `truncated_rate` 高 → 同上,加大 `--max-tokens` |
 | `aime25` 跑 16 repeats 太慢 | 临时把 `N_REPEATS=4`;或只跑 `--num-examples 5` smoke |
-| reasoning 模型温度选不对 | DSv3.2/V4 用 `1.0`,R1 系用 `0.6`,通用 instruct 用 `0.0` |
+| reasoning 模型温度选不对 | 留空 `TASK_TEMPERATURE_JSON` 即可用 R1 推荐(`0.6` for aime/gpqa);DSv3.2/V4 必须 `{"...":1.0}` 显式覆盖 |
 | 远程 venv 缺包 | 删 `.venv` 重跑环境检查 stage,Jenkins 会自动 `uv pip install .` |
 | 邮件 metrics 全 N/A | `find reports/<tester>/<build> -name metrics.json` 看是否拉到本地;若拉到但 N/A,检查 `aggregate` 字段名 |

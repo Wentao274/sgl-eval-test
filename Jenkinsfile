@@ -23,11 +23,11 @@ pipeline {
         string(name: 'EXAMPLES',     defaultValue: '',    description: '样本数限制(空 = 不限制,跑全集)')
         string(name: 'N_REPEATS',    defaultValue: '',   description: '每题采样次数(空 = 各基准 registry 默认:gsm8k/mmlu=1, aime=16, gpqa=8;填值则按该值执行)')
         string(name: 'NUM_THREADS',  defaultValue: '32',  description: '并发线程数(默认 32)')
-        string(name: 'TEMPERATURE',  defaultValue: '0.0', description: '采样温度(默认 0.0;reasoning 模型按需调 0.6/1.0)')
         string(name: 'TOP_P',        defaultValue: '0.95', description: 'nucleus top_p(默认 0.95)')
         string(name: 'MAX_TOKENS',   defaultValue: '131072', description: '生成最大 token 数(默认 131072;清空 = 不指定)')
         choice(name: 'THINKING',     choices: ['', 'true', 'false'], description: '覆盖 thinking 模式(空=用各基准默认:gsm8k/mmlu=false,aime/gpqa=true)')
         text(name: 'TASK_MAX_TOKENS_JSON', defaultValue: '', description: '按任务覆盖 max_tokens 的 JSON,例: {"aime25":32768,"gpqa":32768}')
+        text(name: 'TASK_TEMPERATURE_JSON', defaultValue: '', description: '按任务覆盖 temperature 的 JSON,例: {"aime25":0.6,"gpqa":0.6};留空则用脚本内置 R1 推荐(gsm8k/mmlu/mmmu_pro=0.0, aime24/25/26/gpqa=0.6);跑 DSv3.2/V4 应填 1.0')
 
         string(name: 'DESCRIPTION', defaultValue: '', description: '模型服务描述信息(仅用于邮件展示)')
         text(name: 'RECIPIENTS',    defaultValue: 'liwt@zetyun.com', description: '报告邮件接收者(逗号分隔)')
@@ -68,10 +68,11 @@ pipeline {
                     println("样本限制:        ${params.EXAMPLES ?: '无限制'}")
                     println("n_repeats:       ${params.N_REPEATS ?: 'registry default'}")
                     println("并发线程:        ${params.NUM_THREADS}")
-                    println("温度/top_p:      ${params.TEMPERATURE} / ${params.TOP_P}")
+                    println("top_p:           ${params.TOP_P}")
                     println("max_tokens:      ${params.MAX_TOKENS ?: 'unlimited'}")
                     println("thinking:        ${params.THINKING ?: 'registry default'}")
                     println("per-task max_tokens JSON: ${params.TASK_MAX_TOKENS_JSON ?: 'N/A'}")
+                    println("per-task temperature JSON: ${params.TASK_TEMPERATURE_JSON ?: 'N/A(用脚本内置 R1 默认)'}")
                     println("模型描述:        ${params.DESCRIPTION}")
                     println("邮件接收者:      ${params.RECIPIENTS}")
                     println("工作目录:        ${params.WORK_DIR}")
@@ -238,11 +239,11 @@ python3 run_sgleval.py \\
     --examples "${params.EXAMPLES}" \\
     --n-repeats "${params.N_REPEATS}" \\
     --num-threads "${params.NUM_THREADS}" \\
-    --temperature "${params.TEMPERATURE}" \\
     --top-p "${params.TOP_P}" \\
     --max-tokens "${params.MAX_TOKENS}" \\
     --thinking "${params.THINKING}" \\
     --task-max-tokens-json '${params.TASK_MAX_TOKENS_JSON}' \\
+    --task-temperature-json '${params.TASK_TEMPERATURE_JSON}' \\
     --description "${params.DESCRIPTION}"
 echo "=== 测试脚本执行结束 ==="
 echo "=== 输出目录 ==="
@@ -485,10 +486,11 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 <tr><th>样本限制</th><td>${params.EXAMPLES ?: '无限制'}</td></tr>
                 <tr><th>n_repeats</th><td>${params.N_REPEATS ?: 'registry default'}</td></tr>
                 <tr><th>并发线程</th><td>${params.NUM_THREADS}</td></tr>
-                <tr><th>温度 / top_p</th><td>${params.TEMPERATURE} / ${params.TOP_P}</td></tr>
+                <tr><th>top_p</th><td>${params.TOP_P}</td></tr>
                 <tr><th>max_tokens</th><td>${params.MAX_TOKENS ?: 'unlimited'}</td></tr>
                 <tr><th>thinking</th><td>${params.THINKING ?: 'registry default'}</td></tr>
                 <tr><th>per-task max_tokens JSON</th><td>${params.TASK_MAX_TOKENS_JSON ?: 'N/A'}</td></tr>
+                <tr><th>per-task temperature JSON</th><td>${params.TASK_TEMPERATURE_JSON ?: '脚本内置 R1 默认(gsm8k/mmlu/mmmu_pro=0.0, aime/gpqa=0.6)'}</td></tr>
                 <tr><th>执行时间</th><td>${currentBuild.durationString}</td></tr>
                 <tr><th>测试状态</th><td>${resultStatus}</td></tr>
                 <tr><th>构建状态</th><td>${currentBuild.currentResult}</td></tr>

@@ -17,7 +17,6 @@
 #   API_KEY        OpenAI 风格 api key,默认 EMPTY
 #   N_REPEATS      每题重复采样次数,空 = 用 registry 默认
 #   NUM_THREADS    并发线程数,默认 8
-#   TEMPERATURE    采样温度,默认 0.0
 #   TOP_P          nucleus 概率,默认 0.95
 #   MAX_TOKENS     生成最大 token 数,空 = 不指定(NS 默认 None)
 #   THINKING       true / false / 空(空 = 用 registry 默认)
@@ -25,6 +24,11 @@
 #   OUTPUT_BASE    结果根目录,sgl-eval 会在此下创建 sgl_eval_<name>_<stamp>/
 #   TASK_MAX_TOKENS_JSON  可选 JSON,形如 {"aime25":32768,"gpqa":32768},
 #                          按任务覆盖 MAX_TOKENS(若设置则覆盖全局 MAX_TOKENS)
+#   TASK_TEMPERATURE_JSON  按 task 指定采样温度的 JSON,形如
+#                          {"gsm8k":0.0,"aime24":0.6,"gpqa":0.6}.留空则
+#                          使用内置 R1 推荐默认(gsm8k/mmlu/mmmu_pro=0.0,
+#                          aime24/25/26/gpqa=0.6). 温度是模型属性,跑 DSv3.2/V4
+#                          时应覆盖为 1.0;greedy(n_repeats>1)时 sgl-eval 自身会告警
 
 set -o pipefail
 
@@ -39,12 +43,15 @@ API_KEY=${API_KEY:-EMPTY}
 OUTPUT_BASE=${OUTPUT_BASE:-./output}
 EXAMPLES=${EXAMPLES:-}
 N_REPEATS=${N_REPEATS:-}
-NUM_THREADS=${NUM_THREADS:-8}
-TEMPERATURE=${TEMPERATURE:-0.0}
+NUM_THREADS=${NUM_THREADS:-32}
 TOP_P=${TOP_P:-0.95}
 MAX_TOKENS=${MAX_TOKENS:-131072}
 THINKING=${THINKING:-}
 TASK_MAX_TOKENS_JSON=${TASK_MAX_TOKENS_JSON:-}
+# R1-family 推荐:greedy benchmarks 用 0.0,pass@k 用 0.6;
+# 跑 DSv3.2/V4 时应在外层(TASK_TEMPERATURE_JSON env / Jenkins param)覆盖为 1.0.
+_DEFAULT_TASK_TEMPERATURE_JSON='{"gsm8k":0.0,"aime24":0.6,"aime25":0.6,"aime26":0.6,"mmlu":0.0,"gpqa":0.6,"mmmu_pro":0.0}'
+TASK_TEMPERATURE_JSON=${TASK_TEMPERATURE_JSON:-$_DEFAULT_TASK_TEMPERATURE_JSON}
 
 # ---------- 日志文件 ----------
 TASKS_UNDERSCORE=$(echo "$DATASETS" | tr ',' '-')
@@ -74,6 +81,31 @@ print(v if v is not None else '')
     echo "$global_max_tokens"
 }
 
+# ---------- 按任务覆盖的 temperature ----------
+# 与 _resolve_max_tokens 同形,但 fallback 是 0.0(greedy)而非全局变量
+# (温度不再有"全局默认",只有 per-task JSON;未在 JSON 中的任务回退到 greedy).
+_resolve_temperature() {
+    local dataset="$1"
+    local per_task_temp
+    per_task_temp=$(python3 -c "
+import json, sys
+try:
+    m = json.loads('''${TASK_TEMPERATURE_JSON}''')
+except Exception:
+    m = {}
+v = m.get('${dataset}')
+if v is None:
+    print('')
+else:
+    print(v)
+" 2>/dev/null || echo "")
+    if [ -n "$per_task_temp" ]; then
+        echo "$per_task_temp"
+        return
+    fi
+    echo "0.0"
+}
+
 # ---------- run_task:接受 4 个位置参数 + 通过 env 读取扩展参数 ----------
 run_task() {
     local MODEL="$1"        # 必填:模型名
@@ -88,7 +120,6 @@ run_task() {
         --model "$MODEL"
         --api-key "$API_KEY"
         --num-threads "$NUM_THREADS"
-        --temperature "$TEMPERATURE"
         --top-p "$TOP_P"
         --out-dir "${OUTPUT_BASE}"
     )
@@ -102,6 +133,10 @@ run_task() {
     local task_max_tokens
     task_max_tokens=$(_resolve_max_tokens "$DATASET")
     [ -n "$task_max_tokens" ] && cmd_args+=(--max-tokens "$task_max_tokens")
+
+    local task_temperature
+    task_temperature=$(_resolve_temperature "$DATASET")
+    cmd_args+=(--temperature "$task_temperature")
 
     case "$THINKING" in
         true)  cmd_args+=(--thinking)    ;;
@@ -120,7 +155,7 @@ run_task() {
     echo "  EXAMPLES      : ${EXAMPLES:-<unlimited>}"| tee -a "$LOG_FILE"
     echo "  N_REPEATS     : ${N_REPEATS:-<registry default>}" | tee -a "$LOG_FILE"
     echo "  NUM_THREADS   : $NUM_THREADS"            | tee -a "$LOG_FILE"
-    echo "  TEMPERATURE   : $TEMPERATURE"            | tee -a "$LOG_FILE"
+    echo "  TEMPERATURE   : ${task_temperature:-<greedy 0.0>}" | tee -a "$LOG_FILE"
     echo "  TOP_P         : $TOP_P"                  | tee -a "$LOG_FILE"
     echo "  MAX_TOKENS    : ${task_max_tokens:-<unlimited>}" | tee -a "$LOG_FILE"
     echo "  THINKING      : ${THINKING:-<registry default>}" | tee -a "$LOG_FILE"
@@ -149,10 +184,11 @@ run_task() {
     echo "  EXAMPLES       : ${EXAMPLES:-<unlimited>}"
     echo "  N_REPEATS      : ${N_REPEATS:-<registry default>}"
     echo "  NUM_THREADS    : $NUM_THREADS"
-    echo "  TEMPERATURE    : $TEMPERATURE"
     echo "  TOP_P          : $TOP_P"
     echo "  MAX_TOKENS     : ${MAX_TOKENS:-<unlimited>}"
     echo "  THINKING       : ${THINKING:-<registry default>}"
+    echo "  TASK_MAX_TOKENS_JSON  : ${TASK_MAX_TOKENS_JSON:-<脚本内置 fallback 到 MAX_TOKENS>}"
+    echo "  TASK_TEMPERATURE_JSON : ${TASK_TEMPERATURE_JSON}"
     echo "  OUTPUT_BASE    : $OUTPUT_BASE"
     echo "  LOG_FILE       : $LOG_FILE"
     echo "========================================"
