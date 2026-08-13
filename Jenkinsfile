@@ -22,12 +22,12 @@ pipeline {
 
         string(name: 'EXAMPLES',     defaultValue: '',    description: '样本数限制(空 = 不限制,跑全集)')
         string(name: 'N_REPEATS',    defaultValue: '',   description: '每题采样次数(空 = 各基准 registry 默认:gsm8k/mmlu=1, aime=16, gpqa=8;填值则按该值执行)')
-        string(name: 'NUM_THREADS',  defaultValue: '32',  description: '并发线程数(默认 32)')
+        string(name: 'NUM_THREADS',  defaultValue: '15',  description: '并发线程数(默认 15)')
         string(name: 'TOP_P',        defaultValue: '0.95', description: 'nucleus top_p(默认 0.95)')
         string(name: 'MAX_TOKENS',   defaultValue: '131072', description: '生成最大 token 数(默认 131072;清空 = 不指定)')
         choice(name: 'THINKING',     choices: ['', 'true', 'false'], description: '覆盖 thinking 模式(空=用各基准默认:gsm8k/mmlu=false,aime/gpqa=true)')
         text(name: 'TASK_MAX_TOKENS_JSON', defaultValue: '', description: '按任务覆盖 max_tokens 的 JSON,例: {"aime25":32768,"gpqa":32768}')
-        text(name: 'TASK_TEMPERATURE_JSON', defaultValue: '', description: '按任务覆盖 temperature 的 JSON,例: {"aime25":0.6,"gpqa":0.6};留空则用脚本内置 R1 推荐(gsm8k/mmlu/mmmu_pro=0.0, aime24/25/26/gpqa=0.6);跑 DSv3.2/V4 应填 1.0')
+        text(name: 'TASK_TEMPERATURE_JSON', defaultValue: '{"aime24":1.0,"aime25":1.0,"aime26":1.0,"gpqa":1.0}', description: '按任务覆盖 temperature 的 JSON;当前默认为 DSv3.2/V4 推荐(aime24/25/26/gpqa=1.0, gsm8k/mmlu/mmmu_pro 未列则回退 greedy 0.0);跑 R1 应改为 {"aime24":0.6,"aime25":0.6,"aime26":0.6,"gpqa":0.6}')
 
         string(name: 'DESCRIPTION', defaultValue: '', description: '模型服务描述信息(仅用于邮件展示)')
         text(name: 'RECIPIENTS',    defaultValue: 'liwt@zetyun.com', description: '报告邮件接收者(逗号分隔)')

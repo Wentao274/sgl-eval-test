@@ -117,12 +117,12 @@ Jenkins 通过 ssh 远程到 `REMOTE_HOST`(默认 `10.201.132.50`)在 `WORK_DIR`
 | `TASK_GSM8K` / `TASK_AIME24` / `TASK_AIME25` / `TASK_AIME26` / `TASK_MMLU` / `TASK_GPQA` / `TASK_MMMU_PRO` | 位置参数 `<name>` | 见各 checkbox                    | 7 个基准一个 boolean,勾选后逗号拼接传 `--tasks` |
 | `EXAMPLES` | `--num-examples` | 空                              | 空 = 跑全集 |
 | `N_REPEATS` | `--n-repeats` | 空                              | 空 = 用各基准的 registry 默认(gsm8k/mmlu=1,aime=16,gpqa=8);填值则按该值执行 |
-| `NUM_THREADS` | `--num-threads` | `32`                           | 并发线程数 |
+| `NUM_THREADS` | `--num-threads` | `15`                           | 并发线程数 |
 | `TOP_P` | `--top-p` | `0.95`                         | nucleus |
 | `MAX_TOKENS` | `--max-tokens` | `131072`                       | 清空 = 不指定(NS 默认 None) |
 | `THINKING` | `--thinking` / `--no-thinking` | 空                              | 空 = 用各基准 registry 默认 |
 | `TASK_MAX_TOKENS_JSON` | (shell 内 per-task 覆盖) | 空                              | 例 `{"aime25":32768,"gpqa":32768}` |
-| `TASK_TEMPERATURE_JSON` | (shell 内 per-task 覆盖) | 空                              | 空 = 用脚本内置 R1 推荐(`gsm8k/mmlu/mmmu_pro=0.0, aime24/25/26/gpqa=0.6`);跑 DSv3.2/V4 时填 `{"aime24":1.0,...}` |
+| `TASK_TEMPERATURE_JSON` | (shell 内 per-task 覆盖) | `{"aime24":1.0,"aime25":1.0,"aime26":1.0,"gpqa":1.0}` | DSv3.2/V4 推荐(aime24/25/26/gpqa=1.0,未列任务回退 greedy 0.0);跑 R1 改为 `{"aime24":0.6,"aime25":0.6,"aime26":0.6,"gpqa":0.6}` |
 | `DESCRIPTION` / `RECIPIENTS` / `WORK_DIR` | — | —                              | 元信息/邮件收件人/远程目录 |
 
 **为什么有 `TASK_MAX_TOKENS_JSON`:** sgl-eval 的 `--max-tokens` 是全局的,但
