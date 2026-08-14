@@ -27,7 +27,10 @@ pipeline {
         string(name: 'MAX_TOKENS',   defaultValue: '131072', description: '生成最大 token 数(默认 131072;清空 = 不指定)')
         choice(name: 'THINKING',     choices: ['', 'true', 'false'], description: '覆盖 thinking 模式(空=用各基准默认:gsm8k/mmlu=false,aime/gpqa=true)')
         text(name: 'TASK_MAX_TOKENS_JSON', defaultValue: '', description: '按任务覆盖 max_tokens 的 JSON,例: {"aime25":32768,"gpqa":32768}')
-        text(name: 'TASK_TEMPERATURE_JSON', defaultValue: '{"aime24":1.0,"aime25":1.0,"aime26":1.0,"gpqa":1.0}', description: '按任务覆盖 temperature 的 JSON;当前默认为 DSv3.2/V4 推荐(aime24/25/26/gpqa=1.0, gsm8k/mmlu/mmmu_pro 未列则回退 greedy 0.0);跑 R1 应改为 {"aime24":0.6,"aime25":0.6,"aime26":0.6,"gpqa":0.6}')
+        choice(name: 'TASK_TEMPERATURE_JSON', choices: [
+            '{"gsm8k":1.0,"aime24":1.0,"aime25":1.0,"aime26":1.0,"mmlu":1.0,"gpqa":1.0,"mmmu_pro":1.0}',
+            '{"gsm8k":0.0,"aime24":0.6,"aime25":0.6,"aime26":0.6,"mmlu":0.0,"gpqa":0.6,"mmmu_pro":0.0}'
+        ], description: '按任务覆盖 temperature 的 JSON(覆盖全部 7 个任务):第一项=全部 1.0(DSv3.2/V4 推荐,默认);第二项=R1 推荐(gsm8k/mmlu/mmmu_pro=0.0, aime24/25/26/gpqa=0.6)')
 
         string(name: 'DESCRIPTION', defaultValue: '', description: '模型服务描述信息(仅用于邮件展示)')
         text(name: 'RECIPIENTS',    defaultValue: 'liwt@zetyun.com', description: '报告邮件接收者(逗号分隔)')
@@ -72,7 +75,7 @@ pipeline {
                     println("max_tokens:      ${params.MAX_TOKENS ?: 'unlimited'}")
                     println("thinking:        ${params.THINKING ?: 'registry default'}")
                     println("per-task max_tokens JSON: ${params.TASK_MAX_TOKENS_JSON ?: 'N/A'}")
-                    println("per-task temperature JSON: ${params.TASK_TEMPERATURE_JSON ?: 'N/A(用脚本内置 R1 默认)'}")
+                    println("per-task temperature JSON: ${params.TASK_TEMPERATURE_JSON}")
                     println("模型描述:        ${params.DESCRIPTION}")
                     println("邮件接收者:      ${params.RECIPIENTS}")
                     println("工作目录:        ${params.WORK_DIR}")
@@ -490,7 +493,7 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 <tr><th>max_tokens</th><td>${params.MAX_TOKENS ?: 'unlimited'}</td></tr>
                 <tr><th>thinking</th><td>${params.THINKING ?: 'registry default'}</td></tr>
                 <tr><th>per-task max_tokens JSON</th><td>${params.TASK_MAX_TOKENS_JSON ?: 'N/A'}</td></tr>
-                <tr><th>per-task temperature JSON</th><td>${params.TASK_TEMPERATURE_JSON ?: '脚本内置 R1 默认(gsm8k/mmlu/mmmu_pro=0.0, aime/gpqa=0.6)'}</td></tr>
+                <tr><th>per-task temperature JSON</th><td>${params.TASK_TEMPERATURE_JSON}</td></tr>
                 <tr><th>执行时间</th><td>${currentBuild.durationString}</td></tr>
                 <tr><th>测试状态</th><td>${resultStatus}</td></tr>
                 <tr><th>构建状态</th><td>${currentBuild.currentResult}</td></tr>
